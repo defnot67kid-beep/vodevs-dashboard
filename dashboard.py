@@ -20,7 +20,7 @@ basic_auth = BasicAuth(app)
 # ==========================================
 CONFIG_FILE = "rank_configs.json"
 DEFAULT_BG_FILE = "default_bg.png"
-FONT_PATH = "arial.ttf"
+FONT_PATH = "Roboto-Regular.ttf"  # UPLOAD THIS FONT TO RAILWAY!
 
 # Load user configurations
 if os.path.exists(CONFIG_FILE):
@@ -58,7 +58,7 @@ def get_card(user_id):
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
-        avatar_url = request.args.get('avatar')  # <--- The bot sends this now!
+        avatar_url = request.args.get('avatar')
 
         # Get User Config
         config = configs.get(user_id, {
@@ -68,20 +68,17 @@ def get_card(user_id):
             "font_color": "#ffffff"
         })
 
-        # 1. Create the Base Canvas (1000x300)
+        # 1. Create the Base Canvas (900x250 - Cleaner Size)
         if os.path.exists(DEFAULT_BG_FILE):
-            bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((1000, 300))
+            bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((900, 250))
         else:
-            bg_img = Image.new('RGB', (1000, 300), color=config.get('bg_color', '#2f3136'))
+            bg_img = Image.new('RGB', (900, 250), color=config.get('bg_color', '#2f3136'))
 
-        # 2. Add a semi-transparent dark layer
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
-        overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, 140))
-        img.paste(overlay, (0, 0), overlay)
 
         # ==========================================
-        # 3. AVATAR DOWNLOAD (100% Success Rate)
+        # 2. AVATAR (Left Side, Clean Circle)
         # ==========================================
         avatar_img = None
         if avatar_url:
@@ -91,51 +88,64 @@ def get_card(user_id):
                 if resp.status_code == 200:
                     avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     
-                    # Circular mask
-                    mask = Image.new('L', (120, 120), 0)
+                    # Circular mask (110x110)
+                    mask = Image.new('L', (110, 110), 0)
                     draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse((0, 0, 120, 120), fill=255)
+                    draw_mask.ellipse((0, 0, 110, 110), fill=255)
                     
-                    avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
+                    avatar_img = ImageOps.fit(avatar_img, (110, 110), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (45, 90), avatar_img)
+                    
+                    # Position: X=30, Y=70
+                    img.paste(avatar_img, (30, 70), avatar_img)
             except Exception as e:
                 print(f"⚠️ Avatar download error: {e}")
 
         # ==========================================
-        # 4. LOAD FONTS
+        # 3. LOAD CLEAN FONT
         # ==========================================
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 50)
-            font_medium = ImageFont.truetype(FONT_PATH, 30)
-            font_small = ImageFont.truetype(FONT_PATH, 22)
+            font_large = ImageFont.truetype(FONT_PATH, 36)
+            font_medium = ImageFont.truetype(FONT_PATH, 22)
+            font_small = ImageFont.truetype(FONT_PATH, 18)
         except:
+            # Fallback if you didn't upload the font
+            print("⚠️ Font not found! Please upload Roboto-Regular.ttf")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # 5. Draw Username (Removes emojis to prevent the square)
+        # ==========================================
+        # 4. DRAW CLEAN LAYOUT (Align left of text with X=170)
+        # ==========================================
         font_color = config.get('font_color', '#ffffff')
-        clean_name = ''.join(c for c in name if c.isalnum() or c in (' ', '-', '_', '.'))
-        draw.text((220, 80), clean_name, fill=font_color, font=font_large)
-
-        # 6. Draw XP Text
-        xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((220, 145), xp_text, fill="#b9bbbe", font=font_medium)
-
-        # 7. Draw XP Bar
-        bar_x = 220
-        bar_y = 195
-        bar_width = 720
-        bar_height = 35
-        radius = 18
-
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2f3136")
         
+        # A. Username
+        draw.text((170, 65), f"@{name}", fill=font_color, font=font_large)
+
+        # B. XP and Level Text (One line)
+        # Example: "Level: 6  XP: 70 / 675"
+        status_text = f"Level: 0  XP: {current_xp:,} / {next_level_xp:,}"
+        draw.text((170, 110), status_text, fill="#b9bbbe", font=font_medium)
+
+        # ==========================================
+        # 5. DRAW CLEAN PROGRESS BAR
+        # ==========================================
+        bar_x = 170
+        bar_y = 150
+        bar_width = 700
+        bar_height = 25
+        radius = 20 # Fully rounded edges like the screenshot
+
+        # Background of bar (Light Grey)
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ffffff")
+        
+        # Filled progress bar (Purple/Blue)
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
+        # Return the image
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
@@ -161,7 +171,7 @@ def admin_panel():
                 message = "No file selected."
             else:
                 file.save(DEFAULT_BG_FILE)
-                message = f"✅ Default background image uploaded successfully! (Size: 1000x300 recommended)"
+                message = f"✅ Default background image uploaded successfully! (Size: 900x250 recommended)"
     
     return f'''
     <!DOCTYPE html>
@@ -180,7 +190,7 @@ def admin_panel():
     <body>
         <div class="card">
             <h1>🛠️ Admin Panel</h1>
-            <p>Upload a 1000x300 default background image for all rank cards.</p>
+            <p>Upload a 900x250 default background image for all rank cards.</p>
             <form method="POST" enctype="multipart/form-data">
                 <input type="file" name="bg_image" accept="image/png, image/jpeg">
                 <br>
