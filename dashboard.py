@@ -41,12 +41,20 @@ if os.path.exists(ADMIN_CONFIG_FILE):
 else:
     admin_config = {
         "default_font": "Inter",
-        "default_font_size": 48,
+        "default_font_size": 42,
         "default_bar_color": "#5865F2",
         "default_font_color": "#ffffff",
         "default_stats_color": "#b9bbbe",
         "default_opacity": 100
     }
+
+# ==========================================
+# HELPER: Format numbers to K format (e.g., 1,200 -> 1.2K)
+# ==========================================
+def format_k(num):
+    if num >= 1000:
+        return f"{num/1000:.1f}K"
+    return str(num)
 
 # ==========================================
 # PUBLIC ROUTES
@@ -101,11 +109,11 @@ def get_card(user_id):
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
         avatar_url = request.args.get('avatar')
+        rank = request.args.get('rank', '?')
 
         # 2. Load User Config (Fallback to Admin Defaults!)
         user_conf = configs.get(user_id, {})
         
-        # Merge Admin Defaults with User Config
         config = {
             "bg_color": user_conf.get('bg_color', "#2f3136"),
             "bar_color": user_conf.get('bar_color', admin_config['default_bar_color']),
@@ -117,7 +125,6 @@ def get_card(user_id):
         }
 
         # 3. Create Canvas (1000x300)
-        # Check for User Background first, then Admin Default, then Solid Color
         user_bg_path = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
         if os.path.exists(user_bg_path):
             bg_img = Image.open(user_bg_path).convert("RGB")
@@ -148,11 +155,11 @@ def get_card(user_id):
                     draw_mask.ellipse((0, 0, 110, 110), fill=255)
                     avatar_img = ImageOps.fit(avatar_img, (110, 110), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (30, 70), avatar_img)
+                    img.paste(avatar_img, (45, 95), avatar_img)
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 5. Load Font (Dynamic based on user choice + ADMIN DEFINED SIZE!)
+        # 5. Load Font
         font_name = config.get('font_family', admin_config['default_font'])
         font_path_map = {
             "Inter": "Inter-Regular.ttf",
@@ -163,7 +170,7 @@ def get_card(user_id):
         font_file = font_path_map.get(font_name, "Inter-Regular.ttf")
         
         font_size_large = int(config.get('font_size', admin_config['default_font_size']))
-        font_size_medium = int(font_size_large * 0.65) # Stat text is slightly smaller
+        font_size_medium = int(font_size_large * 0.6)
 
         try:
             font_large = ImageFont.truetype(font_file, font_size_large)
@@ -172,21 +179,32 @@ def get_card(user_id):
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
 
-        # 6. Draw Text
+        # 6. Draw Text (Arcane Style!)
         font_color = config.get('font_color', admin_config['default_font_color'])
         stats_color = config.get('stats_color', admin_config['default_stats_color'])
         
-        # Adjusted layout for larger text
-        draw.text((170, 60), f"@{name}", fill=font_color, font=font_large)
-        status_text = f"Level: 0  XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((170, 120), status_text, fill=stats_color, font=font_medium)
+        # Username
+        draw.text((185, 70), f"@{name}", fill=font_color, font=font_large)
 
-        # 7. Draw Progress Bar
-        bar_x = 170
+        # Red Accent Line directly under the username
+        # Measure text to get exact width
+        bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
+        text_width = bbox[2] - bbox[0]
+        line_y = 70 + font_size_large + 5
+        draw.line([(185, line_y), (185 + text_width, line_y)], fill=config.get('bar_color', admin_config['default_bar_color']), width=4)
+
+        # Stats Text (Using K format!)
+        formatted_current = format_k(current_xp)
+        formatted_next = format_k(next_level_xp)
+        stats_text = f"Level: 0  XP: {formatted_current} / {formatted_next}  Rank: #{rank}"
+        draw.text((185, 120), stats_text, fill=stats_color, font=font_medium)
+
+        # 7. Draw Progress Bar (Clean White & Colored)
+        bar_x = 185
         bar_y = 170
-        bar_width = 800
-        bar_height = 30
-        radius = 20
+        bar_width = 780
+        bar_height = 28
+        radius = 14
 
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ffffff")
         
@@ -213,17 +231,15 @@ def admin_panel():
     message = ""
     
     if request.method == 'POST':
-        # Handle Default Background Upload
         if 'bg_image' in request.files and request.files['bg_image'].filename != '':
             file = request.files['bg_image']
             img = Image.open(file.stream).convert("RGB").resize((1000, 300))
             img.save(DEFAULT_BG_FILE)
             message = "✅ Default background uploaded! (1000x300)"
         
-        # Handle Admin Settings
         elif 'action' in request.form and request.form['action'] == 'save_settings':
             admin_config['default_font'] = request.form.get('default_font', 'Inter')
-            admin_config['default_font_size'] = int(request.form.get('default_font_size', 48))
+            admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
             admin_config['default_bar_color'] = request.form.get('default_bar_color', '#5865F2')
             admin_config['default_font_color'] = request.form.get('default_font_color', '#ffffff')
             admin_config['default_stats_color'] = request.form.get('default_stats_color', '#b9bbbe')
@@ -261,7 +277,7 @@ def admin_panel():
 
         <div class="card">
             <h2>📷 Default Background</h2>
-            <p style="color:#b9bbbe;">Upload a 1000x300 background image. It will be applied to all users who haven't uploaded their own.</p>
+            <p style="color:#b9bbbe;">Upload a 1000x300 background image.</p>
             <form method="POST" enctype="multipart/form-data">
                 <div class="upload-box">
                     <input type="file" name="bg_image" accept="image/png,image/jpeg" style="width:auto; display:inline-block;">
@@ -272,7 +288,7 @@ def admin_panel():
 
         <div class="card">
             <h2>⚙️ Global Default Settings</h2>
-            <p style="color:#b9bbbe;">These settings apply to all users who haven't customized them yet.</p>
+            <p style="color:#b9bbbe;">These settings apply to all users.</p>
             <form method="POST">
                 <input type="hidden" name="action" value="save_settings">
                 
