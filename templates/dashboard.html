@@ -78,8 +78,11 @@
                 <div class="input-row">
                     <label>Font Family</label>
                     <select id="font_family">
-                        <!-- Options will be dynamically filled by Python template -->
-                        <option value="Inter">Inter</option>
+                        <!-- DYNAMICALLY LOADED FROM SERVER -->
+                        {% for font in fonts %}
+                            <option value="{{ font }}">{{ font }}</option>
+                        {% endfor %}
+                        <option value="Inter">Inter (Fallback)</option>
                     </select>
                 </div>
 
@@ -146,13 +149,7 @@
     const user_id = "{{ user_id }}";
     let config = {{ config | tojson }};
 
-    // Load installed fonts from backend (dynamically passed via HTML)
-    const fontOptions = document.getElementById('font_family');
-    fontOptions.innerHTML = '';
-    
-    // NOTE: You will need to render the font list from the Flask template in dashboard.py
-    // For now, we rely on the Jinja2 context.
-    
+    // Apply saved settings to inputs
     document.getElementById('font_family').value = config.font_family || 'Inter';
     document.getElementById('font_color').value = config.font_color || '#ffffff';
     document.getElementById('stats_color').value = config.stats_color || '#b9bbbe';
@@ -163,6 +160,7 @@
     document.getElementById('font_size_val').innerText = (config.font_size || 48) + 'px';
     document.getElementById('opacity_val').innerText = config.opacity || 100;
 
+    // Live Preview Logic
     async function updatePreview() {
         const formData = {
             font_family: document.getElementById('font_family').value,
@@ -178,6 +176,7 @@
         document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}&_=${Date.now()}`;
     }
 
+    // Update display values
     document.getElementById('font_size').addEventListener('input', function() {
         document.getElementById('font_size_val').innerText = this.value + 'px';
         updatePreview();
@@ -187,11 +186,13 @@
         updatePreview();
     });
 
+    // Preview on every change
     document.querySelectorAll('select, input[type="color"], input[type="range"]').forEach(input => {
         input.addEventListener('input', updatePreview);
         input.addEventListener('change', updatePreview);
     });
 
+    // Background Image Upload
     document.getElementById('bg_upload').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -215,6 +216,7 @@
         }
     });
 
+    // Save Logic
     async function saveCard() {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
@@ -249,6 +251,7 @@
         btn.innerText = "Save card";
     }
 
+    // Reset to Defaults
     async function resetDefaults() {
         if(!confirm("Reset all your customization to server defaults?")) return;
         const res = await fetch(`/reset_config/${user_id}`, { method: 'POST' });
