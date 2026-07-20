@@ -9,7 +9,7 @@ import requests
 app = Flask(__name__)
 
 # ==========================================
-# SECURITY SETUP (Admin Login)
+# SECURITY
 # ==========================================
 app.config['BASIC_AUTH_USERNAME'] = 'realgyjs@gmail.com'
 app.config['BASIC_AUTH_PASSWORD'] = 'Livetopimo'
@@ -20,7 +20,6 @@ basic_auth = BasicAuth(app)
 # ==========================================
 CONFIG_FILE = "rank_configs.json"
 DEFAULT_BG_FILE = "default_bg.png"
-FONT_PATH = "Roboto-Regular.ttf"  # UPLOAD THIS FONT TO RAILWAY!
 
 # Load user configurations
 if os.path.exists(CONFIG_FILE):
@@ -30,7 +29,7 @@ else:
     configs = {}
 
 # ==========================================
-# PUBLIC ROUTES
+# ROUTES
 # ==========================================
 
 @app.route('/')
@@ -53,22 +52,25 @@ def save_config(user_id):
 @app.route('/get_card/<user_id>')
 def get_card(user_id):
     try:
-        # Get data from the URL parameters
-        name = request.args.get('name', f'User {user_id[:4]}')
+        # 1. Get data from URL parameters
+        name = request.args.get('name', f'User')
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
         avatar_url = request.args.get('avatar')
 
-        # Get User Config
+        # 2. Load User Config (or defaults)
+        # We also read the 6 new customization settings
         config = configs.get(user_id, {
             "bg_color": "#2f3136",
             "bar_color": "#5865F2",
             "opacity": 100,
-            "font_color": "#ffffff"
+            "font_color": "#ffffff",
+            "stats_color": "#b9bbbe",
+            "font_family": "Inter"
         })
 
-        # 1. Create the Base Canvas (900x250 - Cleaner Size)
+        # 3. Create Canvas (900x250)
         if os.path.exists(DEFAULT_BG_FILE):
             bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((900, 250))
         else:
@@ -77,9 +79,13 @@ def get_card(user_id):
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # ==========================================
-        # 2. AVATAR (Left Side, Clean Circle)
-        # ==========================================
+        # Apply Overlay (Opacity)
+        overlay_strength = int(config.get('opacity', 100))
+        if overlay_strength > 0:
+            overlay = Image.new('RGBA', (900, 250), (0, 0, 0, overlay_strength))
+            img.paste(overlay, (0, 0), overlay)
+
+        # 4. Avatar
         avatar_img = None
         if avatar_url:
             try:
@@ -87,75 +93,63 @@ def get_card(user_id):
                 resp = requests.get(avatar_url, headers=headers, timeout=5)
                 if resp.status_code == 200:
                     avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    
-                    # Circular mask (110x110)
                     mask = Image.new('L', (110, 110), 0)
                     draw_mask = ImageDraw.Draw(mask)
                     draw_mask.ellipse((0, 0, 110, 110), fill=255)
-                    
                     avatar_img = ImageOps.fit(avatar_img, (110, 110), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    
-                    # Position: X=30, Y=70
                     img.paste(avatar_img, (30, 70), avatar_img)
             except Exception as e:
-                print(f"⚠️ Avatar download error: {e}")
+                print(f"⚠️ Avatar error: {e}")
 
-        # ==========================================
-        # 3. LOAD CLEAN FONT
-        # ==========================================
+        # 5. Load Font (Dynamic based on user choice!)
+        font_name = config.get('font_family', 'Inter')
+        font_path_map = {
+            "Inter": "Inter-Regular.ttf",
+            "Roboto": "Roboto-Regular.ttf",
+            "Open Sans": "OpenSans-Regular.ttf",
+            "Montserrat": "Montserrat-Regular.ttf"
+        }
+        font_file = font_path_map.get(font_name, "Inter-Regular.ttf")
+        
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 36)
-            font_medium = ImageFont.truetype(FONT_PATH, 22)
-            font_small = ImageFont.truetype(FONT_PATH, 18)
+            font_large = ImageFont.truetype(font_file, 36)
+            font_medium = ImageFont.truetype(font_file, 22)
         except:
-            # Fallback if you didn't upload the font
-            print("⚠️ Font not found! Please upload Roboto-Regular.ttf")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
-            font_small = ImageFont.load_default()
 
-        # ==========================================
-        # 4. DRAW CLEAN LAYOUT (Align left of text with X=170)
-        # ==========================================
+        # 6. Draw Text
         font_color = config.get('font_color', '#ffffff')
+        stats_color = config.get('stats_color', '#b9bbbe')
         
-        # A. Username
         draw.text((170, 65), f"@{name}", fill=font_color, font=font_large)
-
-        # B. XP and Level Text (One line)
-        # Example: "Level: 6  XP: 70 / 675"
         status_text = f"Level: 0  XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((170, 110), status_text, fill="#b9bbbe", font=font_medium)
+        draw.text((170, 110), status_text, fill=stats_color, font=font_medium)
 
-        # ==========================================
-        # 5. DRAW CLEAN PROGRESS BAR
-        # ==========================================
+        # 7. Draw Progress Bar
         bar_x = 170
         bar_y = 150
         bar_width = 700
         bar_height = 25
-        radius = 20 # Fully rounded edges like the screenshot
+        radius = 20
 
-        # Background of bar (Light Grey)
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ffffff")
         
-        # Filled progress bar (Purple/Blue)
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
-        # Return the image
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
         return send_file(img_io, mimetype='image/png')
     except Exception as e:
-        print(f"❌ ERROR in /get_card: {e}")
-        return f"❌ Image generation failed: {e}", 500
+        print(f"❌ ERROR: {e}")
+        return f"❌ Image generation failed", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES
+# ADMIN ROUTES
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
@@ -171,13 +165,13 @@ def admin_panel():
                 message = "No file selected."
             else:
                 file.save(DEFAULT_BG_FILE)
-                message = f"✅ Default background image uploaded successfully! (Size: 900x250 recommended)"
+                message = f"✅ Default background uploaded! (900x250 recommended)"
     
     return f'''
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Admin Panel - Default Rank Card</title>
+        <title>Admin Panel</title>
         <style>
             body {{ font-family: sans-serif; background: #1e1e2e; color: white; text-align: center; padding: 50px; }}
             .card {{ background: #2f3136; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 12px; }}
@@ -190,11 +184,11 @@ def admin_panel():
     <body>
         <div class="card">
             <h1>🛠️ Admin Panel</h1>
-            <p>Upload a 900x250 default background image for all rank cards.</p>
+            <p>Upload a 900x250 default background image.</p>
             <form method="POST" enctype="multipart/form-data">
                 <input type="file" name="bg_image" accept="image/png, image/jpeg">
                 <br>
-                <button type="submit">Upload Default Background</button>
+                <button type="submit">Upload Background</button>
             </form>
             <div class="msg">{message}</div>
         </div>
