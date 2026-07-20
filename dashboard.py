@@ -80,47 +80,60 @@ def get_card(user_id):
         img.paste(overlay, (0, 0), overlay)
 
         # ==========================================
-        # 3. FETCH AND DRAW AVATAR (FIXED)
+        # 3. FETCH AND DRAW AVATAR (BULLETPROOF FIX)
         # ==========================================
-        # Use the .webp format which is universally supported by Discord's CDN
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.webp?size=512"
         avatar_img = None
         
         try:
-            # Add a User-Agent header to mimic a browser (fixes forbidden errors)
+            # Use Discord's official API to get the avatar hash. This ALWAYS works.
+            api_url = f"https://discord.com/api/v10/users/{user_id}"
             headers = {'User-Agent': 'Mozilla/5.0'}
-            resp = requests.get(avatar_url, headers=headers, timeout=5)
+            
+            # Fetch the user data from Discord API
+            resp = requests.get(api_url, headers=headers, timeout=5)
             
             if resp.status_code == 200:
-                # Open the image
-                avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                user_data = resp.json()
+                avatar_hash = user_data.get('avatar')
                 
-                # Create a circular mask
-                mask = Image.new('L', (140, 140), 0)
-                draw_mask = ImageDraw.Draw(mask)
-                draw_mask.ellipse((0, 0, 140, 140), fill=255)
-                
-                # Resize and apply mask
-                avatar_img = ImageOps.fit(avatar_img, (140, 140), Image.LANCZOS)
-                avatar_img.putalpha(mask)
-                
-                # Paste the avatar onto the card (Left side, nice padding)
-                img.paste(avatar_img, (45, 80), avatar_img)
+                if avatar_hash:
+                    # Determine if the avatar is animated (GIF) or static
+                    ext = "gif" if avatar_hash.startswith("a_") else "png"
+                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=512"
+                    
+                    # Download the actual image
+                    img_resp = requests.get(avatar_url, headers=headers, timeout=5)
+                    if img_resp.status_code == 200:
+                        avatar_img = Image.open(io.BytesIO(img_resp.content)).convert("RGBA")
+                        
+                        # Create a circular mask
+                        mask = Image.new('L', (140, 140), 0)
+                        draw_mask = ImageDraw.Draw(mask)
+                        draw_mask.ellipse((0, 0, 140, 140), fill=255)
+                        
+                        # Resize and apply mask
+                        avatar_img = ImageOps.fit(avatar_img, (140, 140), Image.LANCZOS)
+                        avatar_img.putalpha(mask)
+                        
+                        # Paste the avatar onto the card
+                        img.paste(avatar_img, (45, 80), avatar_img)
+                    else:
+                        print(f"❌ Avatar image download failed: {img_resp.status_code}")
+                else:
+                    print("ℹ️ User has no custom avatar (default Discord avatar).")
             else:
-                print(f"Avatar fetch failed with status: {resp.status_code}")
+                print(f"❌ Discord API fetch failed: {resp.status_code}")
         except Exception as e:
-            print(f"Avatar error: {e}")
+            print(f"⚠️ Avatar error (Ignored): {e}")
 
         # ==========================================
-        # 4. LOAD FONTS (FIXED)
+        # 4. LOAD FONTS
         # ==========================================
         try:
-            # Try loading the font. If it fails, it will use default.
             font_large = ImageFont.truetype(FONT_PATH, 52)
             font_medium = ImageFont.truetype(FONT_PATH, 36)
             font_small = ImageFont.truetype(FONT_PATH, 26)
         except:
-            # Fallback to default (will cause the square box, but won't crash)
             print("⚠️ WARNING: arial.ttf not found. Using default font.")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
