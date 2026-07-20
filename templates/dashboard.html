@@ -9,7 +9,7 @@
         * { box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; margin: 0; padding: 30px; }
         
-        .dashboard-card { max-width: 800px; margin: 0 auto; background: #2f3136; padding: 25px; border-radius: 16px; border: 1px solid #40444b; }
+        .dashboard-card { max-width: 750px; margin: 0 auto; background: #2f3136; padding: 25px; border-radius: 16px; border: 1px solid #40444b; }
 
         .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
         .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; }
@@ -22,27 +22,46 @@
         .preview-box { width: 100%; aspect-ratio: 900 / 250; background: #202225; border-radius: 10px; margin-bottom: 25px; overflow: hidden; border: 2px solid #40444b; display: flex; align-items: center; justify-content: center; }
         .preview-img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 
-        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        /* 2-COLUMN GRID - Exactly like Arcane */
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px; }
         @media (max-width: 650px) { .controls-grid { grid-template-columns: 1fr; } }
 
-        .control-group { background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b; }
-        .control-group h3 { margin: 0 0 15px 0; color: #ffffff; font-size: 15px; font-weight: 600; }
+        .control-row { display: flex; flex-direction: column; }
+
+        /* TYPOGRAPHY SECTION (Above grid, like the screenshot) */
+        .typography-section { background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b; margin-bottom: 25px; }
+
+        /* INPUT STYLING - Arcane Style */
+        label { display: block; font-weight: 600; margin-bottom: 8px; color: #ffffff; font-size: 15px; }
         
-        .input-row { margin-bottom: 18px; }
-        .input-row:last-child { margin-bottom: 0; }
-        
-        label { display: block; font-weight: 600; margin-bottom: 5px; color: #b9bbbe; font-size: 13px; }
-        
-        select, input[type="number"] { width: 100%; padding: 10px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
-        select:focus, input:focus { border-color: #5865F2; }
-        
-        input[type="color"] { width: 100%; height: 50px; border: 2px solid #40444b; border-radius: 6px; background: transparent; cursor: pointer; padding: 2px; outline: none; }
-        input[type="color"]:hover { border-color: #5865F2; }
+        select { width: 100%; padding: 10px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none; margin-bottom: 15px; }
 
         input[type="range"] { width: 100%; accent-color: #5865F2; height: 4px; background: #40444b; border-radius: 4px; -webkit-appearance: none; appearance: none; outline: none; margin-top: 5px; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #5865F2; cursor: pointer; }
 
-        .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #b9bbbe; margin-top: 2px; }
+        /* CLEAN SQUARE COLOR PICKERS */
+        .color-picker-wrapper { display: flex; flex-direction: column; margin-bottom: 20px; }
+        .color-picker-wrapper label { margin-bottom: 5px; }
+        
+        input[type="color"] { 
+            width: 50px; 
+            height: 50px; 
+            border: none; 
+            border-radius: 6px; 
+            background: transparent; 
+            cursor: pointer; 
+            padding: 0; 
+            outline: none;
+        }
+        /* Hide the default browser color picker border */
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 6px; }
+
+        /* BACKGROUND UPLOAD & REMOVE */
+        .bg-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .bg-row label { margin-bottom: 0; }
+        .remove-btn { color: #ed4245; font-weight: 600; cursor: pointer; border: none; background: transparent; font-size: 14px; padding: 0; }
+        .remove-btn:hover { text-decoration: underline; }
 
         .upload-area { border: 2px dashed #40444b; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s; }
         .upload-area:hover { border-color: #5865F2; background: #2f3136; }
@@ -50,7 +69,10 @@
         .upload-area input { display: none; }
         .file-status { color: #45ddc0; font-size: 12px; margin-top: 5px; display: none; font-weight: 600; }
 
-        .reset-btn { background: transparent; color: #b9bbbe; border: 1px solid #40444b; padding: 10px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; margin-top: 15px; transition: 0.2s; }
+        .warning-text { color: #ed4245; font-size: 13px; margin-top: 10px; }
+        
+        /* Reset Button */
+        .reset-btn { background: transparent; color: #b9bbbe; border: 1px solid #40444b; padding: 10px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; transition: 0.2s; }
         .reset-btn:hover { background: #ed4245; color: white; border-color: #ed4245; }
     </style>
 </head>
@@ -70,78 +92,74 @@
     </div>
 
     <form id="configForm">
-        <div class="controls-grid">
-            
-            <div class="control-group">
-                <h3>Typography</h3>
-                
-                <div class="input-row">
+        
+        <!-- TYPOGRAPHY SECTION -->
+        <div class="typography-section">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="control-row">
                     <label>Font Family</label>
                     <select id="font_family">
-                        <!-- DYNAMICALLY LOADED FROM SERVER -->
                         {% for font in fonts %}
                             <option value="{{ font }}">{{ font }}</option>
                         {% endfor %}
                         <option value="Inter">Inter (Fallback)</option>
                     </select>
                 </div>
-
-                <div class="input-row">
+                <div class="control-row">
                     <label>Font Size</label>
                     <input type="range" id="font_size" min="20" max="80" value="48">
-                    <div class="range-labels">
-                        <span>Small</span>
-                        <span id="font_size_val">48px</span>
-                        <span>Large</span>
-                    </div>
-                </div>
-
-                <div class="input-row">
-                    <label>Font Color</label>
-                    <input type="color" id="font_color" value="#ffffff">
-                </div>
-
-                <div class="input-row" style="margin-bottom: 0;">
-                    <label>Stats Color</label>
-                    <input type="color" id="stats_color" value="#b9bbbe">
-                </div>
-            </div>
-
-            <div class="control-group">
-                <h3>Visuals</h3>
-
-                <div class="input-row">
-                    <label>Progress Bar Color</label>
-                    <input type="color" id="bar_color" value="#5865F2">
-                </div>
-
-                <div class="input-row">
-                    <label>Overlay Opacity</label>
-                    <input type="range" id="opacity" min="0" max="180" value="100">
-                    <div class="range-labels">
-                        <span>Transparent</span>
-                        <span id="opacity_val">100</span>
-                        <span>Dark</span>
-                    </div>
-                </div>
-                
-                <div class="input-row">
-                    <label>Background Color (Fallback)</label>
-                    <input type="color" id="bg_color" value="#2f3136">
-                </div>
-
-                <div class="input-row" style="margin-bottom: 0;">
-                    <label>Custom Background</label>
-                    <div class="upload-area" onclick="document.getElementById('bg_upload').click()">
-                        <p>Upload a background</p>
-                        <input type="file" id="bg_upload" accept="image/png,image/jpeg,image/gif,image/webp">
-                        <div class="file-status" id="file_status">✅ Uploaded!</div>
-                    </div>
                 </div>
             </div>
         </div>
 
-        <button type="button" class="reset-btn" onclick="resetDefaults()">↺ Reset to Defaults</button>
+        <!-- ARCANE STYLE 2x2 GRID -->
+        <div class="controls-grid">
+            
+            <!-- Progress Bar Color -->
+            <div class="color-picker-wrapper">
+                <label>Progress Bar Color</label>
+                <input type="color" id="bar_color" value="#5865F2">
+            </div>
+
+            <!-- Opacity -->
+            <div class="color-picker-wrapper">
+                <label>Opacity</label>
+                <input type="range" id="opacity" min="0" max="180" value="100">
+            </div>
+
+            <!-- Background Color -->
+            <div class="color-picker-wrapper">
+                <label>Background Color</label>
+                <input type="color" id="bg_color" value="#2f3136">
+            </div>
+
+            <!-- Font Color -->
+            <div class="color-picker-wrapper">
+                <label>Font Color</label>
+                <input type="color" id="font_color" value="#ffffff">
+            </div>
+            
+        </div>
+
+        <!-- Custom Background Section -->
+        <div style="background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b;">
+            <div class="bg-row">
+                <label>Custom Background</label>
+                <button type="button" class="remove-btn" onclick="removeBackground()">Remove</button>
+            </div>
+            
+            <div class="upload-area" onclick="document.getElementById('bg_upload').click()">
+                <p>Upload a background</p>
+                <input type="file" id="bg_upload" accept="image/png,image/jpeg,image/gif,image/webp">
+                <div class="file-status" id="file_status">✅ Uploaded!</div>
+            </div>
+            
+            <div class="warning-text">
+                NSFW images will result in a permanent ban from this bot with no option for appeal.
+            </div>
+        </div>
+
+        <button type="button" class="reset-btn" style="margin-top: 25px;" onclick="resetDefaults()">↺ Reset to Defaults</button>
     </form>
 </div>
 
@@ -152,20 +170,16 @@
     // Apply saved settings to inputs
     document.getElementById('font_family').value = config.font_family || 'Inter';
     document.getElementById('font_color').value = config.font_color || '#ffffff';
-    document.getElementById('stats_color').value = config.stats_color || '#b9bbbe';
     document.getElementById('bar_color').value = config.bar_color || '#5865F2';
     document.getElementById('opacity').value = config.opacity || 100;
     document.getElementById('bg_color').value = config.bg_color || '#2f3136';
     document.getElementById('font_size').value = config.font_size || 48;
-    document.getElementById('font_size_val').innerText = (config.font_size || 48) + 'px';
-    document.getElementById('opacity_val').innerText = config.opacity || 100;
 
     // Live Preview Logic
     async function updatePreview() {
         const formData = {
             font_family: document.getElementById('font_family').value,
             font_color: document.getElementById('font_color').value,
-            stats_color: document.getElementById('stats_color').value,
             bar_color: document.getElementById('bar_color').value,
             opacity: document.getElementById('opacity').value,
             bg_color: document.getElementById('bg_color').value,
@@ -175,16 +189,6 @@
         const params = new URLSearchParams(formData);
         document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}&_=${Date.now()}`;
     }
-
-    // Update display values
-    document.getElementById('font_size').addEventListener('input', function() {
-        document.getElementById('font_size_val').innerText = this.value + 'px';
-        updatePreview();
-    });
-    document.getElementById('opacity').addEventListener('input', function() {
-        document.getElementById('opacity_val').innerText = this.value;
-        updatePreview();
-    });
 
     // Preview on every change
     document.querySelectorAll('select, input[type="color"], input[type="range"]').forEach(input => {
@@ -216,6 +220,19 @@
         }
     });
 
+    // Remove Background
+    async function removeBackground() {
+        if(!confirm("Remove your custom background?")) return;
+        // User background is stored in backgrounds/{user_id}.png
+        const res = await fetch(`/remove_bg/${user_id}`, { method: 'POST' });
+        if(res.ok) {
+            document.getElementById('file_status').style.display = 'none';
+            updatePreview();
+        } else {
+            alert("❌ Failed to remove background.");
+        }
+    }
+
     // Save Logic
     async function saveCard() {
         const btn = document.getElementById('saveBtn');
@@ -225,7 +242,6 @@
         const data = {
             font_family: document.getElementById('font_family').value,
             font_color: document.getElementById('font_color').value,
-            stats_color: document.getElementById('stats_color').value,
             bar_color: document.getElementById('bar_color').value,
             opacity: parseInt(document.getElementById('opacity').value),
             bg_color: document.getElementById('bg_color').value,
