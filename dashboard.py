@@ -183,7 +183,7 @@ def get_card(user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 6. Draw Text
+        # 6. Draw Text (NO BLUE UNDERLINE)
         text_color = "#000000"
         stats_color = "#3d3d3d"
         
@@ -192,9 +192,7 @@ def get_card(user_id):
 
         draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
 
-        bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
-        text_w = bbox[2] - bbox[0]
-        draw.line([center_x - (text_w/2), center_y_name + 18, center_x + (text_w/2), center_y_name + 18], fill=config.get('bar_color', '#5865F2'), width=3)
+        # The blue underline code has been REMOVED completely here.
 
         status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
