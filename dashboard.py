@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask_basicauth import BasicAuth
+from authlib.integrations.flask_client import OAuth
 import json
 import os
 import io
@@ -7,9 +8,28 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24) # Generates a secure key for session encryption
 
 # ==========================================
-# SECURITY
+# DISCORD OAUTH2 SETUP
+# ==========================================
+# You must add these 2 variables to your Railway environment!
+CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
+CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:8000")
+
+oauth = OAuth(app)
+discord = oauth.register(
+    name='discord',
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    authorize_url='https://discord.com/api/oauth2/authorize',
+    access_token_url='https://discord.com/api/oauth2/token',
+    client_kwargs={'scope': 'identify'}
+)
+
+# ==========================================
+# SECURITY (Admin Login)
 # ==========================================
 app.config['BASIC_AUTH_USERNAME'] = 'realgyjs@gmail.com'
 app.config['BASIC_AUTH_PASSWORD'] = 'Livetopimo'
@@ -49,15 +69,41 @@ else:
     }
 
 # ==========================================
-# PUBLIC ROUTES
+# ROUTES
 # ==========================================
 
 @app.route('/')
 def home():
     return "✅ Rank Card Dashboard is online!"
 
+@app.route('/dashboard')
+def dashboard_redirect():
+    return redirect(url_for('login'))
+
+@app.route('/login')
+def login():
+    # Redirect the user to Discord to authorize the bot
+    redirect_uri = url_for('authorize', _external=True)
+    return discord.authorize_redirect(redirect_uri)
+
+@app.route('/authorize')
+def authorize():
+    # Discord redirects the user back here after they authorize
+    token = discord.authorize_access_token()
+    resp = discord.get('users/@me', token=token)
+    user_info = resp.json()
+    
+    # Store the user's ID in the session
+    session['user_id'] = user_info['id']
+    
+    return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
+
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
+    # SECURITY CHECK: Ensure the logged-in user is accessing their own card
+    if 'user_id' not in session or session['user_id'] != user_id:
+        return "🚫 Unauthorized access. This card belongs to someone else.", 403
+    
     # Dynamically load available fonts
     font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     if not font_files:
@@ -71,6 +117,10 @@ def dashboard(guild_id, user_id):
 
 @app.route('/save_config/<guild_id>/<user_id>', methods=['POST'])
 def save_config(guild_id, user_id):
+    # SECURITY CHECK
+    if 'user_id' not in session or session['user_id'] != user_id:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+
     data = request.json
     config_key = f"{guild_id}_{user_id}"
     configs[config_key] = data
@@ -80,6 +130,10 @@ def save_config(guild_id, user_id):
 
 @app.route('/reset_config/<guild_id>/<user_id>', methods=['POST'])
 def reset_config(guild_id, user_id):
+    # SECURITY CHECK
+    if 'user_id' not in session or session['user_id'] != user_id:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+
     config_key = f"{guild_id}_{user_id}"
     if config_key in configs:
         del configs[config_key]
@@ -89,13 +143,16 @@ def reset_config(guild_id, user_id):
 
 @app.route('/upload_bg/<guild_id>/<user_id>', methods=['POST'])
 def upload_bg(guild_id, user_id):
+    # SECURITY CHECK
+    if 'user_id' not in session or session['user_id'] != user_id:
+        return "Unauthorized", 403
+
     if 'bg_image' not in request.files:
         return "No file", 400
     file = request.files['bg_image']
     if file.filename == '':
         return "No file", 400
     
-    # Save background specific to this guild and user
     filepath = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
     img = Image.open(file.stream).convert("RGB")
     img = img.resize((900, 250))
@@ -104,6 +161,10 @@ def upload_bg(guild_id, user_id):
 
 @app.route('/remove_bg/<guild_id>/<user_id>', methods=['POST'])
 def remove_bg(guild_id, user_id):
+    # SECURITY CHECK
+    if 'user_id' not in session or session['user_id'] != user_id:
+        return "Unauthorized", 403
+
     filepath = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
     if os.path.exists(filepath):
         try:
@@ -116,14 +177,12 @@ def remove_bg(guild_id, user_id):
 @app.route('/get_card/<guild_id>/<user_id>')
 def get_card(guild_id, user_id):
     try:
-        # 1. Get data from URL parameters
         name = request.args.get('name', f'User')
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
         avatar_url = request.args.get('avatar')
 
-        # 2. Load config based on GUILD_ID + USER_ID
         config_key = f"{guild_id}_{user_id}"
         user_conf = configs.get(config_key, {})
         
@@ -135,7 +194,6 @@ def get_card(guild_id, user_id):
             "font_size": user_conf.get('font_size', admin_config['default_font_size'])
         }
 
-        # 3. Background (Guild + User specific)
         user_bg_path = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
         if os.path.exists(user_bg_path):
             bg_img = Image.open(user_bg_path).convert("RGB").resize((900, 250))
@@ -147,13 +205,11 @@ def get_card(guild_id, user_id):
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # 4. White Box
         box_padding = 20
         box_x, box_y = box_padding, box_padding
         box_w, box_h = 900 - (box_padding * 2), 250 - (box_padding * 2)
         draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill="#ffffff")
 
-        # 5. Avatar
         avatar_img = None
         if avatar_url:
             try:
@@ -170,7 +226,6 @@ def get_card(guild_id, user_id):
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 6. Load Font
         font_name = config.get('font_family', admin_config['default_font'])
         font_file_path = os.path.join(FONTS_FOLDER, f"{font_name}.ttf")
         font_size_large = int(config.get('font_size', admin_config['default_font_size'])) - 6
@@ -188,7 +243,6 @@ def get_card(guild_id, user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 7. Draw Text
         text_color = "#000000"
         stats_color = "#3d3d3d"
         center_x = box_x + (box_w / 2) - 10
@@ -198,7 +252,6 @@ def get_card(guild_id, user_id):
         status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
 
-        # 8. Draw Progress Bar
         bar_x = box_x + 30
         bar_y = box_y + box_h - 30
         bar_width = box_w - 60
@@ -220,9 +273,8 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES
+# SECURE ADMIN ROUTES (No changes needed)
 # ==========================================
-
 @app.route('/admin', methods=['GET', 'POST'])
 @basic_auth.required
 def admin_panel():
