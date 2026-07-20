@@ -8,25 +8,36 @@
     <style>
         * { box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: #2f3136; padding: 30px; border-radius: 16px; border: 1px solid #40444b; }
+        .container { max-width: 900px; margin: 0 auto; background: #2f3136; padding: 30px; border-radius: 16px; border: 1px solid #40444b; }
         
         .header { text-align: center; margin-bottom: 20px; }
         .preview-container { background: #202225; border-radius: 12px; padding: 10px; margin-bottom: 25px; border: 2px solid #40444b; }
-        .preview-img { width: 100%; max-width: 700px; height: auto; border-radius: 8px; display: block; margin: 0 auto; }
+        .preview-img { width: 100%; max-width: 800px; height: auto; border-radius: 8px; display: block; margin: 0 auto; }
 
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
         
-        .card-box { background: #36393f; padding: 15px; border-radius: 10px; }
-        label { display: block; font-weight: 600; margin-bottom: 5px; color: #b9bbbe; font-size: 0.9em; }
-        select, input[type="color"], input[type="range"] { width: 100%; margin-top: 5px; }
-        select { padding: 8px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-size: 16px; }
-        input[type="color"] { height: 40px; border: none; background: transparent; cursor: pointer; padding: 0; }
-        input[type="range"] { accent-color: #5865F2; height: 6px; }
+        .card-box { background: #36393f; padding: 20px; border-radius: 12px; border: 1px solid #40444b; }
+        h3 { margin-top: 0; color: #b9bbbe; border-bottom: 1px solid #40444b; padding-bottom: 10px; }
+        
+        label { display: block; font-weight: 600; margin-top: 15px; color: #b9bbbe; font-size: 0.9em; }
+        label:first-of-type { margin-top: 0; }
+        
+        select, input[type="color"], input[type="range"], input[type="number"] { width: 100%; margin-top: 5px; padding: 8px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-size: 16px; }
+        input[type="color"] { height: 45px; border: none; background: transparent; cursor: pointer; padding: 0; }
+        input[type="range"] { accent-color: #5865F2; height: 6px; padding: 0; }
+        
+        .upload-area { border: 2px dashed #40444b; border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; margin-top: 15px; transition: 0.2s; }
+        .upload-area:hover { border-color: #5865F2; background: #2f3136; }
+        .upload-area input { display: none; }
+        .file-status { font-size: 0.8em; color: #45ddc0; margin-top: 5px; display: none; }
 
         .btn-save { background: #5865F2; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; font-size: 18px; cursor: pointer; width: 100%; margin-top: 25px; transition: 0.2s; }
         .btn-save:hover { background: #4752c4; transform: scale(1.02); }
         .btn-save:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        
+        .reset-btn { background: #ed4245; margin-top: 10px; }
+        .reset-btn:hover { background: #c03538; }
     </style>
 </head>
 <body>
@@ -34,54 +45,76 @@
 <div class="container">
     <div class="header">
         <h1>🎨 Edit Rank Card</h1>
-        <p style="color: #b9bbbe;">Customize your visual rank card.</p>
+        <p style="color: #b9bbbe;">Customize your visual rank card. Changes save instantly!</p>
     </div>
 
     <div class="preview-container">
-        <img src="" id="previewImg" class="preview-img" alt="Card Preview">
+        <img src="" id="previewImg" class="preview-img" alt="Card Preview Loading...">
     </div>
 
-    <div class="grid">
-        <!-- Font & Text Section -->
-        <div class="card-box">
-            <h3>Typography</h3>
-            <label>Font Family</label>
-            <select id="font_family">
-                <option value="Inter">Inter (Default)</option>
-                <option value="Roboto">Roboto</option>
-                <option value="Open Sans">Open Sans</option>
-                <option value="Montserrat">Montserrat</option>
-            </select>
-            
-            <label style="margin-top: 15px;">Username Color</label>
-            <input type="color" id="font_color" value="#ffffff">
+    <form id="configForm">
+        <div class="grid">
+            <!-- Left Column: Fonts & Colors -->
+            <div class="card-box">
+                <h3>Typography</h3>
+                <label>Font Family</label>
+                <select id="font_family">
+                    <option value="Inter">Inter</option>
+                    <option value="Roboto">Roboto</option>
+                    <option value="Open Sans">Open Sans</option>
+                    <option value="Montserrat">Montserrat</option>
+                </select>
+                
+                <label>Font Size (px)</label>
+                <input type="range" id="font_size" min="20" max="80" value="48">
+                <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#b9bbbe;">
+                    <span>Small</span>
+                    <span id="font_size_val">48px</span>
+                    <span>Large</span>
+                </div>
 
-            <label style="margin-top: 15px;">Statistics Color (Level/XP)</label>
-            <input type="color" id="stats_color" value="#b9bbbe">
+                <label>Username Color</label>
+                <input type="color" id="font_color" value="#ffffff">
+
+                <label>Statistics Color (Level/XP)</label>
+                <input type="color" id="stats_color" value="#b9bbbe">
+            </div>
+
+            <!-- Right Column: Visuals & Background -->
+            <div class="card-box">
+                <h3>Visuals</h3>
+                <label>Progress Bar Color</label>
+                <input type="color" id="bar_color" value="#5865F2">
+
+                <label>Background Overlay (Darkness)</label>
+                <input type="range" id="opacity" min="0" max="180" value="100">
+                <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#b9bbbe;">
+                    <span>Transparent</span>
+                    <span id="opacity_val">100</span>
+                    <span>Dark</span>
+                </div>
+                
+                <label>Background Color (Fallback)</label>
+                <input type="color" id="bg_color" value="#2f3136">
+
+                <label>Custom Background Image (1000x300 recommended)</label>
+                <div class="upload-area" onclick="document.getElementById('bg_upload').click()">
+                    <p style="margin:0;">📁 Click to Upload</p>
+                    <input type="file" id="bg_upload" accept="image/png,image/jpeg,image/gif,image/webp">
+                    <div class="file-status" id="file_status">✅ Uploaded!</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Bar & Background Section -->
-        <div class="card-box">
-            <h3>Visuals</h3>
-            <label>Progress Bar Color</label>
-            <input type="color" id="bar_color" value="#5865F2">
-
-            <label style="margin-top: 15px;">Background Opacity (Darkness)</label>
-            <input type="range" id="opacity" min="0" max="150" value="100">
-            <div style="font-size: 0.8em; color: #b9bbbe; margin-top: 5px;">0 = Fully Transparent, 150 = Fully Dark</div>
-            
-            <label style="margin-top: 15px;">Background Color (Fallback)</label>
-            <input type="color" id="bg_color" value="#2f3136">
-        </div>
-    </div>
-
-    <button class="btn-save" id="saveBtn" onclick="saveCard()">💾 Save Customizations</button>
+        <button type="button" class="btn-save" onclick="saveCard()">💾 Save Customizations</button>
+        <button type="button" class="btn-save reset-btn" onclick="resetDefaults()">↺ Reset to Defaults</button>
+    </form>
 </div>
 
 <script>
-    // Load saved config on page load
     const user_id = "{{ user_id }}";
     let config = {{ config | tojson }};
+    let hasUploadedBg = false;
 
     // Apply saved settings to inputs
     document.getElementById('font_family').value = config.font_family || 'Inter';
@@ -90,33 +123,71 @@
     document.getElementById('bar_color').value = config.bar_color || '#5865F2';
     document.getElementById('opacity').value = config.opacity || 100;
     document.getElementById('bg_color').value = config.bg_color || '#2f3136';
+    document.getElementById('font_size').value = config.font_size || 48;
+    document.getElementById('font_size_val').innerText = (config.font_size || 48) + 'px';
+    document.getElementById('opacity_val').innerText = config.opacity || 100;
 
     // Live Preview Logic
-    function updatePreview() {
+    async function updatePreview() {
         const formData = {
             font_family: document.getElementById('font_family').value,
             font_color: document.getElementById('font_color').value,
             stats_color: document.getElementById('stats_color').value,
             bar_color: document.getElementById('bar_color').value,
             opacity: document.getElementById('opacity').value,
-            bg_color: document.getElementById('bg_color').value
+            bg_color: document.getElementById('bg_color').value,
+            font_size: document.getElementById('font_size').value
         };
 
-        // Build query string for preview
         const params = new URLSearchParams(formData);
-        // We use a mock user_id for preview because the backend needs a real ID to fetch XP
-        document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}`;
+        // Add a random query parameter to bypass browser cache on preview
+        document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}&_=${Date.now()}`;
     }
 
+    // Update display values
+    document.getElementById('font_size').addEventListener('input', function() {
+        document.getElementById('font_size_val').innerText = this.value + 'px';
+        updatePreview();
+    });
+    document.getElementById('opacity').addEventListener('input', function() {
+        document.getElementById('opacity_val').innerText = this.value;
+        updatePreview();
+    });
+
     // Preview on every change
-    document.querySelectorAll('select, input').forEach(input => {
+    document.querySelectorAll('select, input[type="color"]').forEach(input => {
         input.addEventListener('input', updatePreview);
         input.addEventListener('change', updatePreview);
     });
 
+    // Background Image Upload
+    document.getElementById('bg_upload').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('bg_image', file);
+
+        document.getElementById('file_status').style.display = 'block';
+        document.getElementById('file_status').innerText = '⏳ Uploading...';
+
+        const res = await fetch(`/upload_bg/${user_id}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if(res.ok) {
+            document.getElementById('file_status').innerText = '✅ Uploaded!';
+            hasUploadedBg = true;
+            updatePreview(); // Refresh preview with new bg
+        } else {
+            document.getElementById('file_status').innerText = '❌ Upload failed.';
+        }
+    });
+
     // Save Logic
     async function saveCard() {
-        const btn = document.getElementById('saveBtn');
+        const btn = document.querySelector('.btn-save');
         btn.disabled = true;
         btn.innerText = "Saving...";
 
@@ -126,7 +197,8 @@
             stats_color: document.getElementById('stats_color').value,
             bar_color: document.getElementById('bar_color').value,
             opacity: parseInt(document.getElementById('opacity').value),
-            bg_color: document.getElementById('bg_color').value
+            bg_color: document.getElementById('bg_color').value,
+            font_size: parseInt(document.getElementById('font_size').value)
         };
 
         try {
@@ -148,8 +220,20 @@
         btn.innerText = "💾 Save Customizations";
     }
 
+    // Reset to Defaults
+    async function resetDefaults() {
+        if(!confirm("Reset all your customization to server defaults?")) return;
+
+        const res = await fetch(`/reset_config/${user_id}`, { method: 'POST' });
+        if(res.ok) {
+            location.reload(); // Simple reload to pull defaults
+        } else {
+            alert("❌ Failed to reset.");
+        }
+    }
+
     // Trigger first preview
-    updatePreview();
+    setTimeout(updatePreview, 100);
 </script>
 </body>
 </html>
