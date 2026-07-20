@@ -1,328 +1,262 @@
-from flask import Flask, render_template, request, jsonify, send_file
-from flask_basicauth import BasicAuth
-import json
-import os
-import io
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-import requests
-
-app = Flask(__name__)
-
-# ==========================================
-# SECURITY
-# ==========================================
-app.config['BASIC_AUTH_USERNAME'] = 'realgyjs@gmail.com'
-app.config['BASIC_AUTH_PASSWORD'] = 'Livetopimo'
-basic_auth = BasicAuth(app)
-
-# ==========================================
-# CONFIGURATION
-# ==========================================
-CONFIG_FILE = "rank_configs.json"
-ADMIN_CONFIG_FILE = "admin_config.json"
-DEFAULT_BG_FILE = "default_bg.png"
-USER_BG_FOLDER = "backgrounds/"
-FONTS_FOLDER = "fonts/"
-
-if not os.path.exists(USER_BG_FOLDER):
-    os.makedirs(USER_BG_FOLDER)
-if not os.path.exists(FONTS_FOLDER):
-    os.makedirs(FONTS_FOLDER)
-
-if os.path.exists(CONFIG_FILE):
-    with open(CONFIG_FILE, 'r') as f:
-        configs = json.load(f)
-else:
-    configs = {}
-
-if os.path.exists(ADMIN_CONFIG_FILE):
-    with open(ADMIN_CONFIG_FILE, 'r') as f:
-        admin_config = json.load(f)
-else:
-    admin_config = {
-        "default_font": "Inter",
-        "default_font_size": 48,
-        "default_bar_color": "#5865F2",
-        "default_font_color": "#ffffff",
-        "default_stats_color": "#b9bbbe",
-        "default_opacity": 0
-    }
-
-# ==========================================
-# PUBLIC ROUTES
-# ==========================================
-
-@app.route('/')
-def home():
-    return "✅ Rank Card Dashboard is online!"
-
-@app.route('/dashboard/<user_id>')
-def dashboard(user_id):
-    user_config = configs.get(user_id, {})
-    return render_template('dashboard.html', user_id=user_id, config=user_config)
-
-@app.route('/save_config/<user_id>', methods=['POST'])
-def save_config(user_id):
-    data = request.json
-    configs[user_id] = data
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(configs, f, indent=4)
-    return jsonify({"status": "saved"})
-
-@app.route('/reset_config/<user_id>', methods=['POST'])
-def reset_config(user_id):
-    if user_id in configs:
-        del configs[user_id]
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(configs, f, indent=4)
-    return jsonify({"status": "reset"})
-
-@app.route('/upload_bg/<user_id>', methods=['POST'])
-def upload_bg(user_id):
-    if 'bg_image' not in request.files:
-        return "No file", 400
-    file = request.files['bg_image']
-    if file.filename == '':
-        return "No file", 400
-    
-    filepath = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
-    img = Image.open(file.stream).convert("RGB")
-    img = img.resize((900, 250))
-    img.save(filepath)
-    return "Uploaded", 200
-
-@app.route('/get_card/<user_id>')
-def get_card(user_id):
-    try:
-        # 1. Get data from URL parameters
-        name = request.args.get('name', f'User')
-        current_xp = int(request.args.get('xp', 0))
-        next_level_xp = int(request.args.get('next_xp', 1000))
-        progress = float(request.args.get('progress', 0.0))
-        avatar_url = request.args.get('avatar')
-
-        user_conf = configs.get(user_id, {})
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Rank Card</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; margin: 0; padding: 30px; }
         
-        config = {
-            "bar_color": user_conf.get('bar_color', admin_config['default_bar_color']),
-            "font_color": user_conf.get('font_color', admin_config['default_font_color']),
-            "stats_color": user_conf.get('stats_color', admin_config['default_stats_color']),
-            "font_family": user_conf.get('font_family', admin_config['default_font']),
-            "font_size": user_conf.get('font_size', admin_config['default_font_size'])
-        }
+        .dashboard-card { max-width: 800px; margin: 0 auto; background: #2f3136; padding: 25px; border-radius: 16px; border: 1px solid #40444b; }
 
-        # 2. Background
-        user_bg_path = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
-        if os.path.exists(user_bg_path):
-            bg_img = Image.open(user_bg_path).convert("RGB").resize((900, 250))
-        elif os.path.exists(DEFAULT_BG_FILE):
-            bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((900, 250))
-        else:
-            bg_img = Image.new('RGB', (900, 250), color='#2f3136')
-
-        img = bg_img.copy()
-        draw = ImageDraw.Draw(img)
-
-        # 3. The Clean White Box (Fills almost the entire card)
-        box_padding = 20
-        box_x, box_y = box_padding, box_padding
-        box_w, box_h = 900 - (box_padding * 2), 250 - (box_padding * 2)
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; }
+        .header p { margin: 4px 0 0 0; color: #b9bbbe; font-size: 14px; }
         
-        draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill="#ffffff")
+        .btn-save { background: #45ddc0; color: #1e1e2e; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 14px; cursor: pointer; transition: 0.2s; }
+        .btn-save:hover { background: #3bc9b0; transform: scale(1.02); }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-        # 4. Avatar
-        avatar_img = None
-        if avatar_url:
-            try:
-                headers = {'User-Agent': 'Mozilla/5.0'}
-                resp = requests.get(avatar_url, headers=headers, timeout=5)
-                if resp.status_code == 200:
-                    avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    mask = Image.new('L', (80, 80), 0)
-                    draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse((0, 0, 80, 80), fill=255)
-                    avatar_img = ImageOps.fit(avatar_img, (80, 80), Image.LANCZOS)
-                    avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (box_x + 20, box_y + 20), avatar_img)
-            except Exception as e:
-                print(f"⚠️ Avatar error: {e}")
+        .preview-box { width: 100%; aspect-ratio: 900 / 250; background: #202225; border-radius: 10px; margin-bottom: 25px; overflow: hidden; border: 2px solid #40444b; display: flex; align-items: center; justify-content: center; }
+        .preview-img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 
-        # 5. Load Font (From custom fonts folder)
-        font_name = config.get('font_family', admin_config['default_font'])
-        font_file_path = os.path.join(FONTS_FOLDER, f"{font_name}.ttf")
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        @media (max-width: 650px) { .controls-grid { grid-template-columns: 1fr; } }
+
+        .control-group { background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b; }
+        .control-group h3 { margin: 0 0 15px 0; color: #ffffff; font-size: 15px; font-weight: 600; }
         
-        font_size_large = int(config.get('font_size', admin_config['default_font_size'])) - 6
-        font_size_medium = int(font_size_large * 0.55)
-
-        try:
-            font_large = ImageFont.truetype(font_file_path, font_size_large)
-            font_medium = ImageFont.truetype(font_file_path, font_size_medium)
-        except:
-            font_large = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
-
-        # 6. Draw Text
-        text_color = "#000000"
-        stats_color = "#3d3d3d"
+        .input-row { margin-bottom: 18px; }
+        .input-row:last-child { margin-bottom: 0; }
         
-        center_x = box_x + (box_w / 2) - 10
-        center_y_name = 75
-
-        draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
-
-        bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
-        text_w = bbox[2] - bbox[0]
-        draw.line([center_x - (text_w/2), center_y_name + 18, center_x + (text_w/2), center_y_name + 18], fill=config.get('bar_color', '#5865F2'), width=3)
-
-        status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
-
-        # 7. Draw Progress Bar
-        bar_x = box_x + 30
-        bar_y = box_y + box_h - 30
-        bar_width = box_w - 60
-        bar_height = 20
-        radius = 12
-
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#e0e0e0")
+        label { display: block; font-weight: 600; margin-bottom: 5px; color: #b9bbbe; font-size: 13px; }
         
-        filled_width = bar_width * progress
-        if filled_width > 0:
-            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
-
-        img_io = io.BytesIO()
-        img.save(img_io, 'PNG')
-        img_io.seek(0)
-        return send_file(img_io, mimetype='image/png')
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
-        return f"❌ Image generation failed", 500
-
-# ==========================================
-# SECURE ADMIN ROUTES
-# ==========================================
-
-@app.route('/admin', methods=['GET', 'POST'])
-@basic_auth.required
-def admin_panel():
-    global admin_config
-    message = ""
-    
-    if request.method == 'POST':
-        # Handle Default Background Upload
-        if 'bg_image' in request.files and request.files['bg_image'].filename != '':
-            file = request.files['bg_image']
-            img = Image.open(file.stream).convert("RGB").resize((900, 250))
-            img.save(DEFAULT_BG_FILE)
-            message = "✅ Default background uploaded! (900x250)"
+        select, input[type="number"] { width: 100%; padding: 10px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
+        select:focus, input:focus { border-color: #5865F2; }
         
-        # Handle Font Upload
-        elif 'font_file' in request.files and request.files['font_file'].filename != '':
-            file = request.files['font_file']
-            if file.filename.endswith('.ttf'):
-                filepath = os.path.join(FONTS_FOLDER, file.filename)
-                file.save(filepath)
-                message = f"✅ Font '{file.filename}' uploaded successfully! It will now appear in the user dropdown."
-            else:
-                message = "❌ Invalid file type. Please upload a .ttf file."
+        input[type="color"] { width: 100%; height: 50px; border: 2px solid #40444b; border-radius: 6px; background: transparent; cursor: pointer; padding: 2px; outline: none; }
+        input[type="color"]:hover { border-color: #5865F2; }
 
-        # Handle Admin Settings
-        elif 'action' in request.form and request.form['action'] == 'save_settings':
-            admin_config['default_font'] = request.form.get('default_font', 'Inter')
-            admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
-            admin_config['default_bar_color'] = request.form.get('default_bar_color', '#5865F2')
-            admin_config['default_font_color'] = request.form.get('default_font_color', '#ffffff')
-            admin_config['default_stats_color'] = request.form.get('default_stats_color', '#b9bbbe')
-            admin_config['default_opacity'] = int(request.form.get('default_opacity', 0))
-            
-            with open(ADMIN_CONFIG_FILE, 'w') as f:
-                json.dump(admin_config, f, indent=4)
-            message = "✅ Admin settings updated successfully!"
-    
-    # Generate font dropdown options for the admin panel
-    font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
-    
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin Panel</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <style>
-            body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; padding: 20px; text-align: center; }}
-            .card {{ background: #2f3136; max-width: 700px; margin: 20px auto; padding: 30px; border-radius: 16px; border: 1px solid #40444b; text-align: left; }}
-            h1, h2 {{ color: #45ddc0; }}
-            label {{ display: block; margin-top: 15px; font-weight: 600; color: #b9bbbe; }}
-            select, input, button {{ width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; box-sizing: border-box; }}
-            input[type="color"] {{ height: 50px; padding: 0; cursor: pointer; }}
-            input[type="number"] {{ width: 100px; }}
-            button {{ background: #5865F2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }}
-            button:hover {{ background: #4752c4; }}
-            .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
-            .upload-box {{ border: 2px dashed #40444b; padding: 20px; text-align: center; border-radius: 10px; margin-top: 10px; }}
-        </style>
-    </head>
-    <body>
-        <h1>🛠️ Admin Control Panel</h1>
-        <div class="msg">{message}</div>
+        input[type="range"] { width: 100%; accent-color: #5865F2; height: 4px; background: #40444b; border-radius: 4px; -webkit-appearance: none; appearance: none; outline: none; margin-top: 5px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #5865F2; cursor: pointer; }
 
-        <div class="card">
-            <h2>📷 Default Background</h2>
-            <p style="color:#b9bbbe;">Upload a 900x250 background image.</p>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="upload-box">
-                    <input type="file" name="bg_image" accept="image/png,image/jpeg" style="width:auto; display:inline-block;">
-                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload</button>
-                </div>
-            </form>
+        .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #b9bbbe; margin-top: 2px; }
+
+        .upload-area { border: 2px dashed #40444b; border-radius: 8px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .upload-area:hover { border-color: #5865F2; background: #2f3136; }
+        .upload-area p { margin: 5px 0; color: #b9bbbe; font-size: 13px; }
+        .upload-area input { display: none; }
+        .file-status { color: #45ddc0; font-size: 12px; margin-top: 5px; display: none; font-weight: 600; }
+
+        .reset-btn { background: transparent; color: #b9bbbe; border: 1px solid #40444b; padding: 10px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; margin-top: 15px; transition: 0.2s; }
+        .reset-btn:hover { background: #ed4245; color: white; border-color: #ed4245; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-card">
+    <div class="header">
+        <div>
+            <h1>Edit Rank Card</h1>
+            <p>Refresh preview..</p>
         </div>
+        <button class="btn-save" id="saveBtn" onclick="saveCard()">Save card</button>
+    </div>
 
-        <div class="card">
-            <h2>📁 Font Manager</h2>
-            <p style="color:#b9bbbe;">Upload .ttf font files here. They will immediately appear in the user dashboard's dropdown.</p>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="upload-box">
-                    <input type="file" name="font_file" accept=".ttf" style="width:auto; display:inline-block;">
-                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload Font</button>
+    <div class="preview-box">
+        <img src="" id="previewImg" class="preview-img" alt="Card Preview Loading...">
+    </div>
+
+    <form id="configForm">
+        <div class="controls-grid">
+            
+            <div class="control-group">
+                <h3>Typography</h3>
+                
+                <div class="input-row">
+                    <label>Font Family</label>
+                    <select id="font_family">
+                        <!-- Options will be dynamically filled by Python template -->
+                        <option value="Inter">Inter</option>
+                    </select>
                 </div>
-            </form>
-            <div style="margin-top:15px; font-size:14px; color:#b9bbbe;">
-                <strong>Installed Fonts:</strong> {', '.join(font_files) if font_files else 'None uploaded yet.'}
+
+                <div class="input-row">
+                    <label>Font Size</label>
+                    <input type="range" id="font_size" min="20" max="80" value="48">
+                    <div class="range-labels">
+                        <span>Small</span>
+                        <span id="font_size_val">48px</span>
+                        <span>Large</span>
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <label>Font Color</label>
+                    <input type="color" id="font_color" value="#ffffff">
+                </div>
+
+                <div class="input-row" style="margin-bottom: 0;">
+                    <label>Stats Color</label>
+                    <input type="color" id="stats_color" value="#b9bbbe">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Visuals</h3>
+
+                <div class="input-row">
+                    <label>Progress Bar Color</label>
+                    <input type="color" id="bar_color" value="#5865F2">
+                </div>
+
+                <div class="input-row">
+                    <label>Overlay Opacity</label>
+                    <input type="range" id="opacity" min="0" max="180" value="100">
+                    <div class="range-labels">
+                        <span>Transparent</span>
+                        <span id="opacity_val">100</span>
+                        <span>Dark</span>
+                    </div>
+                </div>
+                
+                <div class="input-row">
+                    <label>Background Color (Fallback)</label>
+                    <input type="color" id="bg_color" value="#2f3136">
+                </div>
+
+                <div class="input-row" style="margin-bottom: 0;">
+                    <label>Custom Background</label>
+                    <div class="upload-area" onclick="document.getElementById('bg_upload').click()">
+                        <p>Upload a background</p>
+                        <input type="file" id="bg_upload" accept="image/png,image/jpeg,image/gif,image/webp">
+                        <div class="file-status" id="file_status">✅ Uploaded!</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="card">
-            <h2>⚙️ Global Default Settings</h2>
-            <p style="color:#b9bbbe;">These settings apply to all users who haven't customized them yet.</p>
-            <form method="POST">
-                <input type="hidden" name="action" value="save_settings">
-                
-                <label>Default Font Family</label>
-                <select name="default_font">
-                    {"".join([f'<option value="{f}" {"selected" if admin_config["default_font"] == f else ""}>{f}</option>' for f in font_files])}
-                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter (Built-in)</option>
-                </select>
+        <button type="button" class="reset-btn" onclick="resetDefaults()">↺ Reset to Defaults</button>
+    </form>
+</div>
 
-                <label>Default Font Size (px)</label>
-                <input type="number" name="default_font_size" value="{admin_config['default_font_size']}" min="20" max="100">
+<script>
+    const user_id = "{{ user_id }}";
+    let config = {{ config | tojson }};
 
-                <label>Default Username Color</label>
-                <input type="color" name="default_font_color" value="{admin_config['default_font_color']}">
+    // Load installed fonts from backend (dynamically passed via HTML)
+    const fontOptions = document.getElementById('font_family');
+    fontOptions.innerHTML = '';
+    
+    // NOTE: You will need to render the font list from the Flask template in dashboard.py
+    // For now, we rely on the Jinja2 context.
+    
+    document.getElementById('font_family').value = config.font_family || 'Inter';
+    document.getElementById('font_color').value = config.font_color || '#ffffff';
+    document.getElementById('stats_color').value = config.stats_color || '#b9bbbe';
+    document.getElementById('bar_color').value = config.bar_color || '#5865F2';
+    document.getElementById('opacity').value = config.opacity || 100;
+    document.getElementById('bg_color').value = config.bg_color || '#2f3136';
+    document.getElementById('font_size').value = config.font_size || 48;
+    document.getElementById('font_size_val').innerText = (config.font_size || 48) + 'px';
+    document.getElementById('opacity_val').innerText = config.opacity || 100;
 
-                <label>Default Stats Color</label>
-                <input type="color" name="default_stats_color" value="{admin_config['default_stats_color']}">
+    async function updatePreview() {
+        const formData = {
+            font_family: document.getElementById('font_family').value,
+            font_color: document.getElementById('font_color').value,
+            stats_color: document.getElementById('stats_color').value,
+            bar_color: document.getElementById('bar_color').value,
+            opacity: document.getElementById('opacity').value,
+            bg_color: document.getElementById('bg_color').value,
+            font_size: document.getElementById('font_size').value
+        };
 
-                <label>Default Progress Bar Color</label>
-                <input type="color" name="default_bar_color" value="{admin_config['default_bar_color']}">
+        const params = new URLSearchParams(formData);
+        document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}&_=${Date.now()}`;
+    }
 
-                <button type="submit" style="margin-top: 25px;">Save Global Settings</button>
-            </form>
-        </div>
-    </body>
-    </html>
-    '''
+    document.getElementById('font_size').addEventListener('input', function() {
+        document.getElementById('font_size_val').innerText = this.value + 'px';
+        updatePreview();
+    });
+    document.getElementById('opacity').addEventListener('input', function() {
+        document.getElementById('opacity_val').innerText = this.value;
+        updatePreview();
+    });
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+    document.querySelectorAll('select, input[type="color"], input[type="range"]').forEach(input => {
+        input.addEventListener('input', updatePreview);
+        input.addEventListener('change', updatePreview);
+    });
+
+    document.getElementById('bg_upload').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('bg_image', file);
+
+        document.getElementById('file_status').style.display = 'block';
+        document.getElementById('file_status').innerText = '⏳ Uploading...';
+
+        const res = await fetch(`/upload_bg/${user_id}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if(res.ok) {
+            document.getElementById('file_status').innerText = '✅ Uploaded!';
+            updatePreview();
+        } else {
+            document.getElementById('file_status').innerText = '❌ Upload failed.';
+        }
+    });
+
+    async function saveCard() {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const data = {
+            font_family: document.getElementById('font_family').value,
+            font_color: document.getElementById('font_color').value,
+            stats_color: document.getElementById('stats_color').value,
+            bar_color: document.getElementById('bar_color').value,
+            opacity: parseInt(document.getElementById('opacity').value),
+            bg_color: document.getElementById('bg_color').value,
+            font_size: parseInt(document.getElementById('font_size').value)
+        };
+
+        try {
+            const res = await fetch(`/save_config/${user_id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if(res.ok) {
+                alert("✅ Settings saved! Run !level in Discord to see your new card.");
+            } else {
+                alert("❌ Error saving settings.");
+            }
+        } catch (e) {
+            alert("❌ Network error.");
+        }
+
+        btn.disabled = false;
+        btn.innerText = "Save card";
+    }
+
+    async function resetDefaults() {
+        if(!confirm("Reset all your customization to server defaults?")) return;
+        const res = await fetch(`/reset_config/${user_id}`, { method: 'POST' });
+        if(res.ok) location.reload();
+        else alert("❌ Failed to reset.");
+    }
+
+    setTimeout(updatePreview, 100);
+</script>
+</body>
+</html>
