@@ -8,15 +8,17 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24) # Generates a secure key for session encryption
+app.secret_key = os.urandom(24)
+
+# FORCE HTTPS FOR URL GENERATION
+app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 # ==========================================
 # DISCORD OAUTH2 SETUP
 # ==========================================
-# You must add these 2 variables to your Railway environment!
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:8000")
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
 
 oauth = OAuth(app)
 discord = oauth.register(
@@ -82,21 +84,23 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
-    # Redirect the user to Discord to authorize the bot
-    redirect_uri = url_for('authorize', _external=True)
+    # Force the EXACT redirect URI that Discord expects
+    redirect_uri = "https://vodevs-dashboard-production.up.railway.app/authorize"
     return discord.authorize_redirect(redirect_uri)
 
 @app.route('/authorize')
 def authorize():
-    # Discord redirects the user back here after they authorize
-    token = discord.authorize_access_token()
-    resp = discord.get('users/@me', token=token)
-    user_info = resp.json()
-    
-    # Store the user's ID in the session
-    session['user_id'] = user_info['id']
-    
-    return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
+    try:
+        token = discord.authorize_access_token()
+        resp = discord.get('users/@me', token=token)
+        user_info = resp.json()
+        
+        # Store the user's ID in the session
+        session['user_id'] = user_info['id']
+        
+        return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
+    except Exception as e:
+        return f"❌ Login failed: {e}"
 
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
@@ -117,7 +121,6 @@ def dashboard(guild_id, user_id):
 
 @app.route('/save_config/<guild_id>/<user_id>', methods=['POST'])
 def save_config(guild_id, user_id):
-    # SECURITY CHECK
     if 'user_id' not in session or session['user_id'] != user_id:
         return jsonify({"status": "error", "message": "Unauthorized"}), 403
 
@@ -130,7 +133,6 @@ def save_config(guild_id, user_id):
 
 @app.route('/reset_config/<guild_id>/<user_id>', methods=['POST'])
 def reset_config(guild_id, user_id):
-    # SECURITY CHECK
     if 'user_id' not in session or session['user_id'] != user_id:
         return jsonify({"status": "error", "message": "Unauthorized"}), 403
 
@@ -143,7 +145,6 @@ def reset_config(guild_id, user_id):
 
 @app.route('/upload_bg/<guild_id>/<user_id>', methods=['POST'])
 def upload_bg(guild_id, user_id):
-    # SECURITY CHECK
     if 'user_id' not in session or session['user_id'] != user_id:
         return "Unauthorized", 403
 
@@ -161,7 +162,6 @@ def upload_bg(guild_id, user_id):
 
 @app.route('/remove_bg/<guild_id>/<user_id>', methods=['POST'])
 def remove_bg(guild_id, user_id):
-    # SECURITY CHECK
     if 'user_id' not in session or session['user_id'] != user_id:
         return "Unauthorized", 403
 
@@ -273,7 +273,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES (No changes needed)
+# SECURE ADMIN ROUTES
 # ==========================================
 @app.route('/admin', methods=['GET', 'POST'])
 @basic_auth.required
