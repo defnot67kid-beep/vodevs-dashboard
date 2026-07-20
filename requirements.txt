@@ -6,3 +6,4 @@ flask
 requests
 flask-basicauth
 authlib
+flask-session
