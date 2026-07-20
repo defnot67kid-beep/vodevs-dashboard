@@ -67,7 +67,7 @@ def get_card(user_id):
             "font_color": "#ffffff"
         })
 
-        # Decide what background to use
+        # 1. Create the Base Canvas (1000x300)
         if os.path.exists(DEFAULT_BG_FILE):
             # Load the default background uploaded by the Admin
             bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((1000, 300))
@@ -75,8 +75,11 @@ def get_card(user_id):
             # Fallback to plain color if no image uploaded
             bg_img = Image.new('RGB', (1000, 300), color=config.get('bg_color', '#2f3136'))
 
+        # 2. Add a semi-transparent dark layer over the whole image so text pops!
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
+        overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, 140)) # 140 is the darkness level
+        img.paste(overlay, (0, 0), overlay)
 
         # 3. Fetch the user's avatar
         avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png?size=512"
@@ -88,23 +91,23 @@ def get_card(user_id):
                 mask = Image.new('L', avatar_img.size, 0)
                 draw_mask = ImageDraw.Draw(mask)
                 draw_mask.ellipse((0, 0, avatar_img.size[0], avatar_img.size[1]), fill=255)
-                avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
-                mask = mask.resize((120, 120), Image.LANCZOS)
+                avatar_img = ImageOps.fit(avatar_img, (140, 140), Image.LANCZOS)
+                mask = mask.resize((140, 140), Image.LANCZOS)
                 avatar_img.putalpha(mask)
             else:
                 avatar_img = None
         except:
             avatar_img = None
 
-        # 4. Draw the Avatar
+        # 4. Draw the Avatar (Bigger: 140x140)
         if avatar_img:
-            img.paste(avatar_img, (60, 90), avatar_img)
+            img.paste(avatar_img, (45, 80), avatar_img)
 
-        # 5. Load Fonts
+        # 5. Load Fonts (Massive size upgrades)
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 40)
-            font_medium = ImageFont.truetype(FONT_PATH, 28)
-            font_small = ImageFont.truetype(FONT_PATH, 22)
+            font_large = ImageFont.truetype(FONT_PATH, 52)  # Bigger username
+            font_medium = ImageFont.truetype(FONT_PATH, 36)  # Bigger XP text
+            font_small = ImageFont.truetype(FONT_PATH, 26)  # Bigger bar text
         except:
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
@@ -112,20 +115,23 @@ def get_card(user_id):
 
         # 6. Draw Username
         font_color = config.get('font_color', '#ffffff')
-        draw.text((220, 95), name, fill=font_color, font=font_large)
+        draw.text((230, 85), name, fill=font_color, font=font_large)
 
-        # 7. Draw XP Text
+        # 7. Draw XP Text (Current / Next)
         xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((220, 150), xp_text, fill="#b9bbbe", font=font_small)
+        draw.text((230, 150), xp_text, fill="#b9bbbe", font=font_medium)
 
-        # 8. Draw XP Bar
-        bar_x = 220
-        bar_y = 190
+        # 8. Draw XP Bar (Massive upgrade: 50px height)
+        bar_x = 230
+        bar_y = 205
         bar_width = 720
-        bar_height = 35
-        radius = 18
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#40444b")
+        bar_height = 50  # Much thicker!
+        radius = 25  # Fully rounded edges
+
+        # Draw background of bar (dark grey)
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2f3136")
         
+        # Draw filled progress bar (color)
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
