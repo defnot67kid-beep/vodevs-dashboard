@@ -58,8 +58,13 @@ def home():
 
 @app.route('/dashboard/<user_id>')
 def dashboard(user_id):
+    # Dynamically load available fonts into the HTML
+    font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
+    if not font_files:
+        font_files = ["Inter"] # Fallback if empty
+    
     user_config = configs.get(user_id, {})
-    return render_template('dashboard.html', user_id=user_id, config=user_config)
+    return render_template('dashboard.html', user_id=user_id, config=user_config, fonts=font_files)
 
 @app.route('/save_config/<user_id>', methods=['POST'])
 def save_config(user_id):
@@ -158,8 +163,14 @@ def get_card(user_id):
             font_large = ImageFont.truetype(font_file_path, font_size_large)
             font_medium = ImageFont.truetype(font_file_path, font_size_medium)
         except:
-            font_large = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
+            # Fallback to Inter if font file is missing
+            fallback_path = os.path.join(FONTS_FOLDER, "Inter.ttf")
+            try:
+                font_large = ImageFont.truetype(fallback_path, font_size_large)
+                font_medium = ImageFont.truetype(fallback_path, font_size_medium)
+            except:
+                font_large = ImageFont.load_default()
+                font_medium = ImageFont.load_default()
 
         # 6. Draw Text
         text_color = "#000000"
@@ -216,13 +227,14 @@ def admin_panel():
             img.save(DEFAULT_BG_FILE)
             message = "✅ Default background uploaded! (900x250)"
         
-        # Handle Font Upload
+        # Handle Font Upload (Support for Drag & Drop API)
         elif 'font_file' in request.files and request.files['font_file'].filename != '':
             file = request.files['font_file']
             if file.filename.endswith('.ttf'):
+                # Save with standard name
                 filepath = os.path.join(FONTS_FOLDER, file.filename)
                 file.save(filepath)
-                message = f"✅ Font '{file.filename}' uploaded successfully! It will now appear in the user dropdown."
+                message = f"✅ Font '{file.filename}' uploaded successfully!"
             else:
                 message = "❌ Invalid file type. Please upload a .ttf file."
 
@@ -260,7 +272,33 @@ def admin_panel():
             button {{ background: #5865F2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }}
             button:hover {{ background: #4752c4; }}
             .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
-            .upload-box {{ border: 2px dashed #40444b; padding: 20px; text-align: center; border-radius: 10px; margin-top: 10px; }}
+            
+            /* Drag & Drop Styling */
+            .upload-zone {{
+                border: 2px dashed #40444b;
+                padding: 30px;
+                text-align: center;
+                border-radius: 10px;
+                margin-top: 10px;
+                transition: all 0.3s;
+                cursor: pointer;
+                position: relative;
+            }}
+            .upload-zone.dragover {{
+                border-color: #5865F2;
+                background: rgba(88, 101, 242, 0.1);
+                transform: scale(1.02);
+            }}
+            .upload-zone input {{
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                top: 0;
+                left: 0;
+                opacity: 0;
+                cursor: pointer;
+            }}
+            .upload-zone p {{ margin: 0; color: #b9bbbe; }}
         </style>
     </head>
     <body>
@@ -270,23 +308,23 @@ def admin_panel():
         <div class="card">
             <h2>📷 Default Background</h2>
             <p style="color:#b9bbbe;">Upload a 900x250 background image.</p>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="upload-box">
-                    <input type="file" name="bg_image" accept="image/png,image/jpeg" style="width:auto; display:inline-block;">
-                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload</button>
-                </div>
-            </form>
+            <div class="upload-zone">
+                <p>📁 Drag & Drop or Click to Upload Background</p>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="file" name="bg_image" accept="image/png,image/jpeg">
+                </form>
+            </div>
         </div>
 
         <div class="card">
-            <h2>📁 Font Manager</h2>
-            <p style="color:#b9bbbe;">Upload .ttf font files here. They will immediately appear in the user dashboard's dropdown.</p>
-            <form method="POST" enctype="multipart/form-data">
-                <div class="upload-box">
-                    <input type="file" name="font_file" accept=".ttf" style="width:auto; display:inline-block;">
-                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload Font</button>
-                </div>
-            </form>
+            <h2>📁 Font Manager (Drag & Drop)</h2>
+            <p style="color:#b9bbbe;">Drag & Drop .ttf files here. They will immediately appear in the user dashboard.</p>
+            <div class="upload-zone" id="fontDropZone">
+                <p>📁 Drag & Drop .ttf Fonts Here or Click</p>
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="file" name="font_file" accept=".ttf" id="fontInput">
+                </form>
+            </div>
             <div style="margin-top:15px; font-size:14px; color:#b9bbbe;">
                 <strong>Installed Fonts:</strong> {', '.join(font_files) if font_files else 'None uploaded yet.'}
             </div>
@@ -301,7 +339,7 @@ def admin_panel():
                 <label>Default Font Family</label>
                 <select name="default_font">
                     {"".join([f'<option value="{f}" {"selected" if admin_config["default_font"] == f else ""}>{f}</option>' for f in font_files])}
-                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter (Built-in)</option>
+                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter (Fallback)</option>
                 </select>
 
                 <label>Default Font Size (px)</label>
@@ -319,6 +357,37 @@ def admin_panel():
                 <button type="submit" style="margin-top: 25px;">Save Global Settings</button>
             </form>
         </div>
+
+        <script>
+            // Drag & Drop Visual Feedback
+            const dropZones = document.querySelectorAll('.upload-zone');
+            dropZones.forEach(zone => {{
+                ['dragenter', 'dragover'].forEach(eventName => {{
+                    zone.addEventListener(eventName, (e) => {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        zone.classList.add('dragover');
+                    }}, false);
+                }});
+
+                ['dragleave', 'drop'].forEach(eventName => {{
+                    zone.addEventListener(eventName, (e) => {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        zone.classList.remove('dragover');
+                    }}, false);
+                }});
+            }});
+
+            // Auto-submit when files are selected (handled by Flask forms)
+            document.querySelectorAll('.upload-zone input[type="file"]').forEach(input => {{
+                input.addEventListener('change', function() {{
+                    if(this.files.length > 0) {{
+                        this.closest('form').submit();
+                    }}
+                }});
+            }});
+        </script>
     </body>
     </html>
     '''
