@@ -41,7 +41,7 @@ if os.path.exists(ADMIN_CONFIG_FILE):
 else:
     admin_config = {
         "default_font": "Inter",
-        "default_font_size": 42,
+        "default_font_size": 62,
         "default_bar_color": "#5865F2",
         "default_font_color": "#ffffff",
         "default_stats_color": "#b9bbbe",
