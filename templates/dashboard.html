@@ -22,16 +22,13 @@
         .preview-box { width: 100%; aspect-ratio: 900 / 250; background: #202225; border-radius: 10px; margin-bottom: 25px; overflow: hidden; border: 2px solid #40444b; display: flex; align-items: center; justify-content: center; }
         .preview-img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 
-        /* 2-COLUMN GRID - Exactly like Arcane */
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px; }
         @media (max-width: 650px) { .controls-grid { grid-template-columns: 1fr; } }
 
         .control-row { display: flex; flex-direction: column; }
 
-        /* TYPOGRAPHY SECTION (Above grid, like the screenshot) */
         .typography-section { background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b; margin-bottom: 25px; }
 
-        /* INPUT STYLING - Arcane Style */
         label { display: block; font-weight: 600; margin-bottom: 8px; color: #ffffff; font-size: 15px; }
         
         select { width: 100%; padding: 10px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none; margin-bottom: 15px; }
@@ -39,7 +36,6 @@
         input[type="range"] { width: 100%; accent-color: #5865F2; height: 4px; background: #40444b; border-radius: 4px; -webkit-appearance: none; appearance: none; outline: none; margin-top: 5px; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #5865F2; cursor: pointer; }
 
-        /* CLEAN SQUARE COLOR PICKERS */
         .color-picker-wrapper { display: flex; flex-direction: column; margin-bottom: 20px; }
         .color-picker-wrapper label { margin-bottom: 5px; }
         
@@ -53,11 +49,9 @@
             padding: 0; 
             outline: none;
         }
-        /* Hide the default browser color picker border */
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 6px; }
 
-        /* BACKGROUND UPLOAD & REMOVE */
         .bg-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
         .bg-row label { margin-bottom: 0; }
         .remove-btn { color: #ed4245; font-weight: 600; cursor: pointer; border: none; background: transparent; font-size: 14px; padding: 0; }
@@ -71,7 +65,6 @@
 
         .warning-text { color: #ed4245; font-size: 13px; margin-top: 10px; }
         
-        /* Reset Button */
         .reset-btn { background: transparent; color: #b9bbbe; border: 1px solid #40444b; padding: 10px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; transition: 0.2s; }
         .reset-btn:hover { background: #ed4245; color: white; border-color: #ed4245; }
     </style>
@@ -93,7 +86,6 @@
 
     <form id="configForm">
         
-        <!-- TYPOGRAPHY SECTION -->
         <div class="typography-section">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div class="control-row">
@@ -112,36 +104,28 @@
             </div>
         </div>
 
-        <!-- ARCANE STYLE 2x2 GRID -->
         <div class="controls-grid">
-            
-            <!-- Progress Bar Color -->
             <div class="color-picker-wrapper">
                 <label>Progress Bar Color</label>
                 <input type="color" id="bar_color" value="#5865F2">
             </div>
 
-            <!-- Opacity -->
             <div class="color-picker-wrapper">
                 <label>Opacity</label>
                 <input type="range" id="opacity" min="0" max="180" value="100">
             </div>
 
-            <!-- Background Color -->
             <div class="color-picker-wrapper">
                 <label>Background Color</label>
                 <input type="color" id="bg_color" value="#2f3136">
             </div>
 
-            <!-- Font Color -->
             <div class="color-picker-wrapper">
                 <label>Font Color</label>
                 <input type="color" id="font_color" value="#ffffff">
             </div>
-            
         </div>
 
-        <!-- Custom Background Section -->
         <div style="background: #36393f; padding: 20px; border-radius: 10px; border: 1px solid #40444b;">
             <div class="bg-row">
                 <label>Custom Background</label>
@@ -164,6 +148,8 @@
 </div>
 
 <script>
+    // IMPORTANT: We now have BOTH guild_id and user_id
+    const guild_id = "{{ guild_id }}";
     const user_id = "{{ user_id }}";
     let config = {{ config | tojson }};
 
@@ -175,7 +161,6 @@
     document.getElementById('bg_color').value = config.bg_color || '#2f3136';
     document.getElementById('font_size').value = config.font_size || 48;
 
-    // Live Preview Logic
     async function updatePreview() {
         const formData = {
             font_family: document.getElementById('font_family').value,
@@ -187,16 +172,15 @@
         };
 
         const params = new URLSearchParams(formData);
-        document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}&_=${Date.now()}`;
+        // Preview now includes both IDs
+        document.getElementById('previewImg').src = `/get_card/${guild_id}/${user_id}?${params.toString()}&_=${Date.now()}`;
     }
 
-    // Preview on every change
     document.querySelectorAll('select, input[type="color"], input[type="range"]').forEach(input => {
         input.addEventListener('input', updatePreview);
         input.addEventListener('change', updatePreview);
     });
 
-    // Background Image Upload
     document.getElementById('bg_upload').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -207,7 +191,7 @@
         document.getElementById('file_status').style.display = 'block';
         document.getElementById('file_status').innerText = '⏳ Uploading...';
 
-        const res = await fetch(`/upload_bg/${user_id}`, {
+        const res = await fetch(`/upload_bg/${guild_id}/${user_id}`, {
             method: 'POST',
             body: formData
         });
@@ -220,11 +204,9 @@
         }
     });
 
-    // Remove Background
     async function removeBackground() {
         if(!confirm("Remove your custom background?")) return;
-        // User background is stored in backgrounds/{user_id}.png
-        const res = await fetch(`/remove_bg/${user_id}`, { method: 'POST' });
+        const res = await fetch(`/remove_bg/${guild_id}/${user_id}`, { method: 'POST' });
         if(res.ok) {
             document.getElementById('file_status').style.display = 'none';
             updatePreview();
@@ -233,7 +215,6 @@
         }
     }
 
-    // Save Logic
     async function saveCard() {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
@@ -249,7 +230,7 @@
         };
 
         try {
-            const res = await fetch(`/save_config/${user_id}`, {
+            const res = await fetch(`/save_config/${guild_id}/${user_id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -267,10 +248,9 @@
         btn.innerText = "Save card";
     }
 
-    // Reset to Defaults
     async function resetDefaults() {
         if(!confirm("Reset all your customization to server defaults?")) return;
-        const res = await fetch(`/reset_config/${user_id}`, { method: 'POST' });
+        const res = await fetch(`/reset_config/${guild_id}/${user_id}`, { method: 'POST' });
         if(res.ok) location.reload();
         else alert("❌ Failed to reset.");
     }
