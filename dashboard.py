@@ -22,9 +22,12 @@ CONFIG_FILE = "rank_configs.json"
 ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
+FONTS_FOLDER = "fonts/"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
+if not os.path.exists(FONTS_FOLDER):
+    os.makedirs(FONTS_FOLDER)
 
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, 'r') as f:
@@ -38,7 +41,7 @@ if os.path.exists(ADMIN_CONFIG_FILE):
 else:
     admin_config = {
         "default_font": "Inter",
-        "default_font_size": 42,
+        "default_font_size": 48,
         "default_bar_color": "#5865F2",
         "default_font_color": "#ffffff",
         "default_stats_color": "#b9bbbe",
@@ -88,10 +91,6 @@ def upload_bg(user_id):
     img.save(filepath)
     return "Uploaded", 200
 
-# ==========================================
-# THE NEW CLEAN CARD LAYOUT
-# ==========================================
-
 @app.route('/get_card/<user_id>')
 def get_card(user_id):
     try:
@@ -124,13 +123,14 @@ def get_card(user_id):
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # 3. The Clean White Box (The Arcane Look!)
-        # Draws a clean white rounded rectangle in the center
-        box_color = "#ffffff"
-        box_x, box_y, box_w, box_h = 40, 40, 820, 170
-        draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill=box_color)
+        # 3. The Clean White Box (Fills almost the entire card)
+        box_padding = 20
+        box_x, box_y = box_padding, box_padding
+        box_w, box_h = 900 - (box_padding * 2), 250 - (box_padding * 2)
+        
+        draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill="#ffffff")
 
-        # 4. Avatar (Smaller, and placed *inside* the white box)
+        # 4. Avatar
         avatar_img = None
         if avatar_url:
             try:
@@ -138,72 +138,58 @@ def get_card(user_id):
                 resp = requests.get(avatar_url, headers=headers, timeout=5)
                 if resp.status_code == 200:
                     avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    mask = Image.new('L', (75, 75), 0)
+                    mask = Image.new('L', (80, 80), 0)
                     draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse((0, 0, 75, 75), fill=255)
-                    avatar_img = ImageOps.fit(avatar_img, (75, 75), Image.LANCZOS)
+                    draw_mask.ellipse((0, 0, 80, 80), fill=255)
+                    avatar_img = ImageOps.fit(avatar_img, (80, 80), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    # Paste into the corner (X=10, Y=10 offset from the box start)
-                    img.paste(avatar_img, (box_x + 15, box_y + 15), avatar_img)
+                    img.paste(avatar_img, (box_x + 20, box_y + 20), avatar_img)
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 5. Load Font (Center-aligned layout)
+        # 5. Load Font (From custom fonts folder)
         font_name = config.get('font_family', admin_config['default_font'])
-        font_path_map = {
-            "Inter": "Inter-Regular.ttf",
-            "Roboto": "Roboto-Regular.ttf",
-            "Open Sans": "OpenSans-Regular.ttf",
-            "Montserrat": "Montserrat-Regular.ttf"
-        }
-        font_file = font_path_map.get(font_name, "Inter-Regular.ttf")
+        font_file_path = os.path.join(FONTS_FOLDER, f"{font_name}.ttf")
         
-        font_size_large = int(config.get('font_size', admin_config['default_font_size']))
+        font_size_large = int(config.get('font_size', admin_config['default_font_size'])) - 6
         font_size_medium = int(font_size_large * 0.55)
 
         try:
-            font_large = ImageFont.truetype(font_file, font_size_large)
-            font_medium = ImageFont.truetype(font_file, font_size_medium)
+            font_large = ImageFont.truetype(font_file_path, font_size_large)
+            font_medium = ImageFont.truetype(font_file_path, font_size_medium)
         except:
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
 
-        # 6. Draw CENTER-ALIGNED Text
-        text_color = "#000000" # Black text on White box
-        stats_color = "#3d3d3d" # Dark Grey stats
+        # 6. Draw Text
+        text_color = "#000000"
+        stats_color = "#3d3d3d"
         
-        # Define the center of the white box
-        center_x = box_x + (box_w / 2) - 20 # Slight adjustment to center the text
+        center_x = box_x + (box_w / 2) - 10
+        center_y_name = 75
 
-        # Draw Username (Center)
-        # Using anchor="mm" (middle middle) lets us center it perfectly by X and Y
-        draw.text((center_x, 85), f"@{name}", fill=text_color, font=font_large, anchor="mm")
+        draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
 
-        # Draw Line under Username
         bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
         text_w = bbox[2] - bbox[0]
-        draw.line([center_x - (text_w/2), 110, center_x + (text_w/2), 110], fill=config.get('bar_color', '#5865F2'), width=3)
+        draw.line([center_x - (text_w/2), center_y_name + 18, center_x + (text_w/2), center_y_name + 18], fill=config.get('bar_color', '#5865F2'), width=3)
 
-        # Draw Level / XP / Rank
         status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((center_x, 140), status_text, fill=stats_color, font=font_medium, anchor="mm")
+        draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
 
-        # 7. Draw Progress Bar (Inside the box, at the bottom)
+        # 7. Draw Progress Bar
         bar_x = box_x + 30
-        bar_y = box_y + box_h - 25
+        bar_y = box_y + box_h - 30
         bar_width = box_w - 60
-        bar_height = 18
+        bar_height = 20
         radius = 12
 
-        # Draw empty grey bar (so it looks 3D/Arcane style)
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#e0e0e0")
         
-        # Draw filled progress bar (Top layer)
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
-        # Return the image
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
@@ -223,12 +209,24 @@ def admin_panel():
     message = ""
     
     if request.method == 'POST':
+        # Handle Default Background Upload
         if 'bg_image' in request.files and request.files['bg_image'].filename != '':
             file = request.files['bg_image']
             img = Image.open(file.stream).convert("RGB").resize((900, 250))
             img.save(DEFAULT_BG_FILE)
             message = "✅ Default background uploaded! (900x250)"
         
+        # Handle Font Upload
+        elif 'font_file' in request.files and request.files['font_file'].filename != '':
+            file = request.files['font_file']
+            if file.filename.endswith('.ttf'):
+                filepath = os.path.join(FONTS_FOLDER, file.filename)
+                file.save(filepath)
+                message = f"✅ Font '{file.filename}' uploaded successfully! It will now appear in the user dropdown."
+            else:
+                message = "❌ Invalid file type. Please upload a .ttf file."
+
+        # Handle Admin Settings
         elif 'action' in request.form and request.form['action'] == 'save_settings':
             admin_config['default_font'] = request.form.get('default_font', 'Inter')
             admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
@@ -240,6 +238,9 @@ def admin_panel():
             with open(ADMIN_CONFIG_FILE, 'w') as f:
                 json.dump(admin_config, f, indent=4)
             message = "✅ Admin settings updated successfully!"
+    
+    # Generate font dropdown options for the admin panel
+    font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     
     return f'''
     <!DOCTYPE html>
@@ -260,7 +261,6 @@ def admin_panel():
             button:hover {{ background: #4752c4; }}
             .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
             .upload-box {{ border: 2px dashed #40444b; padding: 20px; text-align: center; border-radius: 10px; margin-top: 10px; }}
-            .row {{ display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }}
         </style>
     </head>
     <body>
@@ -279,6 +279,20 @@ def admin_panel():
         </div>
 
         <div class="card">
+            <h2>📁 Font Manager</h2>
+            <p style="color:#b9bbbe;">Upload .ttf font files here. They will immediately appear in the user dashboard's dropdown.</p>
+            <form method="POST" enctype="multipart/form-data">
+                <div class="upload-box">
+                    <input type="file" name="font_file" accept=".ttf" style="width:auto; display:inline-block;">
+                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload Font</button>
+                </div>
+            </form>
+            <div style="margin-top:15px; font-size:14px; color:#b9bbbe;">
+                <strong>Installed Fonts:</strong> {', '.join(font_files) if font_files else 'None uploaded yet.'}
+            </div>
+        </div>
+
+        <div class="card">
             <h2>⚙️ Global Default Settings</h2>
             <p style="color:#b9bbbe;">These settings apply to all users who haven't customized them yet.</p>
             <form method="POST">
@@ -286,10 +300,8 @@ def admin_panel():
                 
                 <label>Default Font Family</label>
                 <select name="default_font">
-                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter</option>
-                    <option value="Roboto" {"selected" if admin_config['default_font'] == 'Roboto' else ""}>Roboto</option>
-                    <option value="Open Sans" {"selected" if admin_config['default_font'] == 'Open Sans' else ""}>Open Sans</option>
-                    <option value="Montserrat" {"selected" if admin_config['default_font'] == 'Montserrat' else ""}>Montserrat</option>
+                    {"".join([f'<option value="{f}" {"selected" if admin_config["default_font"] == f else ""}>{f}</option>' for f in font_files])}
+                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter (Built-in)</option>
                 </select>
 
                 <label>Default Font Size (px)</label>
