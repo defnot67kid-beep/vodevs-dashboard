@@ -1,44 +1,29 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask_basicauth import BasicAuth
-from flask_session import Session
-from authlib.integrations.flask_client import OAuth
 import json
-import os 
+import os
 import io
+import uuid
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
 app = Flask(__name__)
 
 # ==========================================
-# SESSION CONFIG (CRITICAL FIX FOR RAILWAY)
+# SESSION CONFIG (Fixed for Railway)
 # ==========================================
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_FILE_DIR'] = './flask_session/'
-Session(app)
-
-# FORCE HTTPS FOR URL GENERATION
-app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 # ==========================================
-# DISCORD OAUTH2 SETUP
+# DISCORD OAUTH2 SETUP (Manual URL Build)
 # ==========================================
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
-
-oauth = OAuth(app)
-discord = oauth.register(
-    name='discord',
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET,
-    authorize_url='https://discord.com/api/oauth2/authorize',
-    access_token_url='https://discord.com/api/oauth2/token',
-    client_kwargs={'scope': 'identify'}
-)
 
 # ==========================================
 # SECURITY (Admin Login)
@@ -94,18 +79,47 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
-    redirect_uri = "https://vodevs-dashboard-production.up.railway.app/authorize"
-    return discord.authorize_redirect(redirect_uri)
+    # MANUAL URL GENERATION (Eliminates mismatching_state error)
+    redirect_uri = f"https://vodevs-dashboard-production.up.railway.app/authorize"
+    oauth_url = (
+        f"https://discord.com/api/oauth2/authorize"
+        f"?client_id={CLIENT_ID}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope=identify"
+    )
+    return redirect(oauth_url)
 
 @app.route('/authorize')
 def authorize():
+    code = request.args.get('code')
+    if not code:
+        return "❌ No authorization code received.", 400
+
+    # Exchange the code for a token manually
+    token_url = "https://discord.com/api/oauth2/token"
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/authorize"
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    
     try:
-        token = discord.authorize_access_token()
-        resp = discord.get('users/@me', token=token)
-        user_info = resp.json()
+        token_resp = requests.post(token_url, data=data, headers=headers)
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
         
+        # Fetch user info
+        user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
+        user_info = user_resp.json()
+        
+        # Store user ID in session
         session['user_id'] = user_info['id']
         
+        # Redirect to dashboard
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
         return f"❌ Login failed: {e}"
