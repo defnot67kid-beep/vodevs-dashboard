@@ -56,49 +56,55 @@ else:
 def home():
     return "✅ Rank Card Dashboard is online!"
 
-@app.route('/dashboard/<user_id>')
-def dashboard(user_id):
-    # Dynamically load available fonts into the HTML
+@app.route('/dashboard/<guild_id>/<user_id>')
+def dashboard(guild_id, user_id):
+    # Dynamically load available fonts
     font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     if not font_files:
-        font_files = ["Inter"] # Fallback if empty
+        font_files = ["Inter"]
     
-    user_config = configs.get(user_id, {})
-    return render_template('dashboard.html', user_id=user_id, config=user_config, fonts=font_files)
+    # Load config based on GUILD_ID + USER_ID
+    config_key = f"{guild_id}_{user_id}"
+    user_config = configs.get(config_key, {})
+    
+    return render_template('dashboard.html', guild_id=guild_id, user_id=user_id, config=user_config, fonts=font_files)
 
-@app.route('/save_config/<user_id>', methods=['POST'])
-def save_config(user_id):
+@app.route('/save_config/<guild_id>/<user_id>', methods=['POST'])
+def save_config(guild_id, user_id):
     data = request.json
-    configs[user_id] = data
+    config_key = f"{guild_id}_{user_id}"
+    configs[config_key] = data
     with open(CONFIG_FILE, 'w') as f:
         json.dump(configs, f, indent=4)
     return jsonify({"status": "saved"})
 
-@app.route('/reset_config/<user_id>', methods=['POST'])
-def reset_config(user_id):
-    if user_id in configs:
-        del configs[user_id]
+@app.route('/reset_config/<guild_id>/<user_id>', methods=['POST'])
+def reset_config(guild_id, user_id):
+    config_key = f"{guild_id}_{user_id}"
+    if config_key in configs:
+        del configs[config_key]
         with open(CONFIG_FILE, 'w') as f:
             json.dump(configs, f, indent=4)
     return jsonify({"status": "reset"})
 
-@app.route('/upload_bg/<user_id>', methods=['POST'])
-def upload_bg(user_id):
+@app.route('/upload_bg/<guild_id>/<user_id>', methods=['POST'])
+def upload_bg(guild_id, user_id):
     if 'bg_image' not in request.files:
         return "No file", 400
     file = request.files['bg_image']
     if file.filename == '':
         return "No file", 400
     
-    filepath = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
+    # Save background specific to this guild and user
+    filepath = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
     img = Image.open(file.stream).convert("RGB")
     img = img.resize((900, 250))
     img.save(filepath)
     return "Uploaded", 200
 
-@app.route('/remove_bg/<user_id>', methods=['POST'])
-def remove_bg(user_id):
-    filepath = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
+@app.route('/remove_bg/<guild_id>/<user_id>', methods=['POST'])
+def remove_bg(guild_id, user_id):
+    filepath = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
     if os.path.exists(filepath):
         try:
             os.remove(filepath)
@@ -107,8 +113,8 @@ def remove_bg(user_id):
             return "Failed to remove", 500
     return "No file found", 200
 
-@app.route('/get_card/<user_id>')
-def get_card(user_id):
+@app.route('/get_card/<guild_id>/<user_id>')
+def get_card(guild_id, user_id):
     try:
         # 1. Get data from URL parameters
         name = request.args.get('name', f'User')
@@ -117,7 +123,9 @@ def get_card(user_id):
         progress = float(request.args.get('progress', 0.0))
         avatar_url = request.args.get('avatar')
 
-        user_conf = configs.get(user_id, {})
+        # 2. Load config based on GUILD_ID + USER_ID
+        config_key = f"{guild_id}_{user_id}"
+        user_conf = configs.get(config_key, {})
         
         config = {
             "bar_color": user_conf.get('bar_color', admin_config['default_bar_color']),
@@ -127,8 +135,8 @@ def get_card(user_id):
             "font_size": user_conf.get('font_size', admin_config['default_font_size'])
         }
 
-        # 2. Background
-        user_bg_path = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
+        # 3. Background (Guild + User specific)
+        user_bg_path = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
         if os.path.exists(user_bg_path):
             bg_img = Image.open(user_bg_path).convert("RGB").resize((900, 250))
         elif os.path.exists(DEFAULT_BG_FILE):
@@ -139,14 +147,13 @@ def get_card(user_id):
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # 3. The Clean White Box (Fills almost the entire card)
+        # 4. White Box
         box_padding = 20
         box_x, box_y = box_padding, box_padding
         box_w, box_h = 900 - (box_padding * 2), 250 - (box_padding * 2)
-        
         draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill="#ffffff")
 
-        # 4. Avatar
+        # 5. Avatar
         avatar_img = None
         if avatar_url:
             try:
@@ -163,10 +170,9 @@ def get_card(user_id):
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 5. Load Font (From custom fonts folder)
+        # 6. Load Font
         font_name = config.get('font_family', admin_config['default_font'])
         font_file_path = os.path.join(FONTS_FOLDER, f"{font_name}.ttf")
-        
         font_size_large = int(config.get('font_size', admin_config['default_font_size'])) - 6
         font_size_medium = int(font_size_large * 0.55)
 
@@ -174,7 +180,6 @@ def get_card(user_id):
             font_large = ImageFont.truetype(font_file_path, font_size_large)
             font_medium = ImageFont.truetype(font_file_path, font_size_medium)
         except:
-            # Fallback to Inter if font file is missing
             fallback_path = os.path.join(FONTS_FOLDER, "Inter.ttf")
             try:
                 font_large = ImageFont.truetype(fallback_path, font_size_large)
@@ -183,21 +188,17 @@ def get_card(user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 6. Draw Text (NO BLUE UNDERLINE)
+        # 7. Draw Text
         text_color = "#000000"
         stats_color = "#3d3d3d"
-        
         center_x = box_x + (box_w / 2) - 10
         center_y_name = 75
 
         draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
-
-        # The blue underline code has been REMOVED completely here.
-
         status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
 
-        # 7. Draw Progress Bar
+        # 8. Draw Progress Bar
         bar_x = box_x + 30
         bar_y = box_y + box_h - 30
         bar_width = box_w - 60
@@ -229,25 +230,21 @@ def admin_panel():
     message = ""
     
     if request.method == 'POST':
-        # Handle Default Background Upload
         if 'bg_image' in request.files and request.files['bg_image'].filename != '':
             file = request.files['bg_image']
             img = Image.open(file.stream).convert("RGB").resize((900, 250))
             img.save(DEFAULT_BG_FILE)
             message = "✅ Default background uploaded! (900x250)"
         
-        # Handle Font Upload (Support for Drag & Drop API)
         elif 'font_file' in request.files and request.files['font_file'].filename != '':
             file = request.files['font_file']
             if file.filename.endswith('.ttf'):
-                # Save with standard name
                 filepath = os.path.join(FONTS_FOLDER, file.filename)
                 file.save(filepath)
                 message = f"✅ Font '{file.filename}' uploaded successfully!"
             else:
                 message = "❌ Invalid file type. Please upload a .ttf file."
 
-        # Handle Admin Settings
         elif 'action' in request.form and request.form['action'] == 'save_settings':
             admin_config['default_font'] = request.form.get('default_font', 'Inter')
             admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
@@ -260,7 +257,6 @@ def admin_panel():
                 json.dump(admin_config, f, indent=4)
             message = "✅ Admin settings updated successfully!"
     
-    # Generate font dropdown options for the admin panel
     font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     
     return f'''
@@ -282,7 +278,6 @@ def admin_panel():
             button:hover {{ background: #4752c4; }}
             .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
             
-            /* Drag & Drop Styling */
             .upload-zone {{
                 border: 2px dashed #40444b;
                 padding: 30px;
@@ -368,7 +363,6 @@ def admin_panel():
         </div>
 
         <script>
-            // Drag & Drop Visual Feedback
             const dropZones = document.querySelectorAll('.upload-zone');
             dropZones.forEach(zone => {{
                 ['dragenter', 'dragover'].forEach(eventName => {{
@@ -388,7 +382,6 @@ def admin_panel():
                 }});
             }});
 
-            // Auto-submit when files are selected (handled by Flask forms)
             document.querySelectorAll('.upload-zone input[type="file"]').forEach(input => {{
                 input.addEventListener('change', function() {{
                     if(this.files.length > 0) {{
