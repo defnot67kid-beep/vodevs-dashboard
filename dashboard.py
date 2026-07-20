@@ -198,7 +198,8 @@ def remove_bg(guild_id, user_id):
 def get_card(guild_id, user_id):
     try:
         name = request.args.get('name', f'User')
-        level = int(request.args.get('level', 0))  # <--- FIX: Read level from URL
+        level = int(request.args.get('level', 0))
+        rank = int(request.args.get('rank', 0))  # <--- FIX: Read rank from URL
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
@@ -264,15 +265,22 @@ def get_card(guild_id, user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 6. Draw Text (FIXED: Uses the 'level' variable)
+        # 6. Draw Text (Uses the 'level' and 'rank' variables)
         text_color = "#000000"
         stats_color = "#3d3d3d"
         center_x = box_x + (box_w / 2) - 10
         center_y_name = 75
 
         draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
-        status_text = f"Level: {level}   XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((center_x, center_y_name + 52), status_text, fill=stats_color, font=font_medium, anchor="mm")
+        
+        # Level and XP line
+        stats_line1 = f"Level: {level}   XP: {current_xp:,} / {next_level_xp:,}"
+        draw.text((center_x, center_y_name + 42), stats_line1, fill=stats_color, font=font_medium, anchor="mm")
+        
+        # Rank line (underneath)
+        if rank > 0:
+            stats_line2 = f"Rank: #{rank}"
+            draw.text((center_x, center_y_name + 72), stats_line2, fill=stats_color, font=font_medium, anchor="mm")
 
         bar_x = box_x + 30
         bar_y = box_y + box_h - 30
