@@ -80,82 +80,94 @@ def get_card(user_id):
         img.paste(overlay, (0, 0), overlay)
 
         # ==========================================
-        # 3. FETCH AND DRAW AVATAR (BULLETPROOF FIX)
+        # 3. AVATAR FETCH (Fixed position & size)
         # ==========================================
         avatar_img = None
-        
+        avatar_success = False
+
         try:
-            # Use Discord's official API to get the avatar hash. This ALWAYS works.
-            api_url = f"https://discord.com/api/v10/users/{user_id}"
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            
-            # Fetch the user data from Discord API
-            resp = requests.get(api_url, headers=headers, timeout=5)
+            # Method A: Classic .png format with forced 512 size
+            cdn_headers = {'User-Agent': 'Mozilla/5.0'}
+            avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png?size=512"
+            resp = requests.get(avatar_url, headers=cdn_headers, timeout=3)
             
             if resp.status_code == 200:
-                user_data = resp.json()
-                avatar_hash = user_data.get('avatar')
+                avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                avatar_success = True
+
+            # Method B: .webp if .png failed
+            if not avatar_success:
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.webp?size=512"
+                resp = requests.get(avatar_url, headers=cdn_headers, timeout=3)
+                if resp.status_code == 200:
+                    avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                    avatar_success = True
+
+            # Process and paste the avatar (BIGGER: 120x120)
+            if avatar_success and avatar_img:
+                # Create a circular mask
+                mask = Image.new('L', (120, 120), 0)
+                draw_mask = ImageDraw.Draw(mask)
+                draw_mask.ellipse((0, 0, 120, 120), fill=255)
                 
-                if avatar_hash:
-                    # Determine if the avatar is animated (GIF) or static
-                    ext = "gif" if avatar_hash.startswith("a_") else "png"
-                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=512"
-                    
-                    # Download the actual image
-                    img_resp = requests.get(avatar_url, headers=headers, timeout=5)
-                    if img_resp.status_code == 200:
-                        avatar_img = Image.open(io.BytesIO(img_resp.content)).convert("RGBA")
-                        
-                        # Create a circular mask
-                        mask = Image.new('L', (140, 140), 0)
-                        draw_mask = ImageDraw.Draw(mask)
-                        draw_mask.ellipse((0, 0, 140, 140), fill=255)
-                        
-                        # Resize and apply mask
-                        avatar_img = ImageOps.fit(avatar_img, (140, 140), Image.LANCZOS)
-                        avatar_img.putalpha(mask)
-                        
-                        # Paste the avatar onto the card
-                        img.paste(avatar_img, (45, 80), avatar_img)
-                    else:
-                        print(f"❌ Avatar image download failed: {img_resp.status_code}")
-                else:
-                    print("ℹ️ User has no custom avatar (default Discord avatar).")
-            else:
-                print(f"❌ Discord API fetch failed: {resp.status_code}")
+                # Resize and apply mask
+                avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
+                avatar_img.putalpha(mask)
+                
+                # Paste the avatar onto the card (X=45, Y=90) - centered left
+                img.paste(avatar_img, (45, 90), avatar_img)
+
+            # Fallback: If no avatar, draw a gray circle with "?"
+            if not avatar_success:
+                print("⚠️ No avatar found. Drawing placeholder circle.")
+                draw.ellipse([45, 90, 165, 210], fill="#36393f", outline="#5865F2", width=4)
+                draw.text((105, 150), "?", fill="#ffffff", font=ImageFont.load_default(), anchor="mm")
+
         except Exception as e:
-            print(f"⚠️ Avatar error (Ignored): {e}")
+            print(f"⚠️ Avatar block error: {e}")
+            try:
+                draw.ellipse([45, 90, 165, 210], fill="#36393f", outline="#5865F2", width=4)
+                draw.text((105, 150), "?", fill="#ffffff", font=ImageFont.load_default(), anchor="mm")
+            except:
+                pass
 
         # ==========================================
-        # 4. LOAD FONTS
+        # 4. LOAD FONTS (Removes the Square Box)
         # ==========================================
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 52)
-            font_medium = ImageFont.truetype(FONT_PATH, 36)
-            font_small = ImageFont.truetype(FONT_PATH, 26)
+            # Using Arial, BUT we replace unsupported emojis with text to prevent the square box!
+            font_large = ImageFont.truetype(FONT_PATH, 50)
+            font_medium = ImageFont.truetype(FONT_PATH, 30)
+            font_small = ImageFont.truetype(FONT_PATH, 22)
         except:
             print("⚠️ WARNING: arial.ttf not found. Using default font.")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # 5. Draw Username
+        # 5. Draw Username (X=220, Y=80)
         font_color = config.get('font_color', '#ffffff')
-        draw.text((230, 85), name, fill=font_color, font=font_large)
+        # We remove emojis from the name to prevent the square box
+        clean_name = ''.join(c for c in name if c.isalnum() or c in (' ', '-', '_', '.'))
+        draw.text((220, 80), clean_name, fill=font_color, font=font_large)
 
-        # 6. Draw XP Text (Current / Next)
+        # 6. Draw XP Text (X=220, Y=145)
         xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((230, 150), xp_text, fill="#b9bbbe", font=font_medium)
+        draw.text((220, 145), xp_text, fill="#b9bbbe", font=font_medium)
 
-        # 7. Draw XP Bar (Thick, rounded)
-        bar_x = 230
-        bar_y = 205
+        # ==========================================
+        # 7. Draw XP Bar (Fixed alignment)
+        # ==========================================
+        bar_x = 220
+        bar_y = 195
         bar_width = 720
-        bar_height = 50
-        radius = 25
+        bar_height = 35  # Nice thickness
+        radius = 18
 
+        # Draw empty bar background
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2f3136")
         
+        # Draw filled progress bar
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
