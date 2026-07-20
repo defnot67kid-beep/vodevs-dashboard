@@ -3,7 +3,7 @@ from flask_basicauth import BasicAuth
 from flask_session import Session
 from authlib.integrations.flask_client import OAuth
 import json
-import os
+import os 
 import io
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
