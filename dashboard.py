@@ -23,31 +23,27 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 
-# Ensure user background folder exists
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
 
-# Load user configurations
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, 'r') as f:
         configs = json.load(f)
 else:
     configs = {}
 
-# Load Admin Config (Global defaults)
 if os.path.exists(ADMIN_CONFIG_FILE):
     with open(ADMIN_CONFIG_FILE, 'r') as f:
         admin_config = json.load(f)
 else:
-    admin_config = {}
-
-# ==========================================
-# HELPER: Format numbers to K format
-# ==========================================
-def format_k(num):
-    if num >= 1000:
-        return f"{num/1000:.1f}K"
-    return str(num)
+    admin_config = {
+        "default_font": "Inter",
+        "default_font_size": 42,
+        "default_bar_color": "#5865F2",
+        "default_font_color": "#ffffff",
+        "default_stats_color": "#b9bbbe",
+        "default_opacity": 0
+    }
 
 # ==========================================
 # PUBLIC ROUTES
@@ -88,54 +84,53 @@ def upload_bg(user_id):
     
     filepath = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
     img = Image.open(file.stream).convert("RGB")
-    img = img.resize((1000, 300))
+    img = img.resize((900, 250))
     img.save(filepath)
     return "Uploaded", 200
+
+# ==========================================
+# THE NEW CLEAN CARD LAYOUT
+# ==========================================
 
 @app.route('/get_card/<user_id>')
 def get_card(user_id):
     try:
-        # 1. Get data from URL parameters (NOW INCLUDING LEVEL!)
+        # 1. Get data from URL parameters
         name = request.args.get('name', f'User')
-        level = int(request.args.get('level', 0))  # <--- FIXED THE LEVEL 0 BUG HERE
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
         avatar_url = request.args.get('avatar')
-        rank = request.args.get('rank', '?')
 
-        # 2. Load User Config (Fallback to massive HARDCODED defaults)
         user_conf = configs.get(user_id, {})
         
         config = {
-            "bg_color": user_conf.get('bg_color', "#2f3136"),
-            "bar_color": user_conf.get('bar_color', "#5865F2"),
-            "opacity": user_conf.get('opacity', 45),     # Reduced to 45 for beautiful backgrounds
-            "font_color": user_conf.get('font_color', "#ffffff"),
-            "stats_color": user_conf.get('stats_color', "#D2D5DA"),
-            "font_family": user_conf.get('font_family', "Inter"),
-            "font_size": user_conf.get('font_size', 72)
+            "bar_color": user_conf.get('bar_color', admin_config['default_bar_color']),
+            "font_color": user_conf.get('font_color', admin_config['default_font_color']),
+            "stats_color": user_conf.get('stats_color', admin_config['default_stats_color']),
+            "font_family": user_conf.get('font_family', admin_config['default_font']),
+            "font_size": user_conf.get('font_size', admin_config['default_font_size'])
         }
 
-        # 3. Create Canvas (1000x300)
+        # 2. Background
         user_bg_path = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
         if os.path.exists(user_bg_path):
-            bg_img = Image.open(user_bg_path).convert("RGB")
+            bg_img = Image.open(user_bg_path).convert("RGB").resize((900, 250))
         elif os.path.exists(DEFAULT_BG_FILE):
-            bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((1000, 300))
+            bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((900, 250))
         else:
-            bg_img = Image.new('RGB', (1000, 300), color=config.get('bg_color', '#2f3136'))
+            bg_img = Image.new('RGB', (900, 250), color='#2f3136')
 
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # Apply Overlay (45% Opacity)
-        overlay_strength = int(config.get('opacity', 45))
-        if overlay_strength > 0:
-            overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, overlay_strength))
-            img.paste(overlay, (0, 0), overlay)
+        # 3. The Clean White Box (The Arcane Look!)
+        # Draws a clean white rounded rectangle in the center
+        box_color = "#ffffff"
+        box_x, box_y, box_w, box_h = 40, 40, 820, 170
+        draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill=box_color)
 
-        # 4. Avatar (150x150 with 4px White Border)
+        # 4. Avatar (Smaller, and placed *inside* the white box)
         avatar_img = None
         if avatar_url:
             try:
@@ -143,76 +138,72 @@ def get_card(user_id):
                 resp = requests.get(avatar_url, headers=headers, timeout=5)
                 if resp.status_code == 200:
                     avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    mask = Image.new('L', (150, 150), 0)
+                    mask = Image.new('L', (75, 75), 0)
                     draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse((0, 0, 150, 150), fill=255)
-                    avatar_img = ImageOps.fit(avatar_img, (150, 150), Image.LANCZOS)
+                    draw_mask.ellipse((0, 0, 75, 75), fill=255)
+                    avatar_img = ImageOps.fit(avatar_img, (75, 75), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (40, 70), avatar_img)
-                    
-                    # Draw thin 4px white border around avatar
-                    draw.ellipse([37, 67, 193, 223], outline="#ffffff", width=4)
+                    # Paste into the corner (X=10, Y=10 offset from the box start)
+                    img.paste(avatar_img, (box_x + 15, box_y + 15), avatar_img)
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 5. Load Font (Inter Bold, SemiBold, and Medium)
-        font_name = config.get('font_family', "Inter")
+        # 5. Load Font (Center-aligned layout)
+        font_name = config.get('font_family', admin_config['default_font'])
         font_path_map = {
-            "Inter": "Inter-Bold.ttf",
-            "Roboto": "Roboto-Bold.ttf",
-            "Open Sans": "OpenSans-Bold.ttf",
-            "Montserrat": "Montserrat-Bold.ttf"
+            "Inter": "Inter-Regular.ttf",
+            "Roboto": "Roboto-Regular.ttf",
+            "Open Sans": "OpenSans-Regular.ttf",
+            "Montserrat": "Montserrat-Regular.ttf"
         }
-        # Try to load bold, fall back to regular, fall back to default
+        font_file = font_path_map.get(font_name, "Inter-Regular.ttf")
+        
+        font_size_large = int(config.get('font_size', admin_config['default_font_size']))
+        font_size_medium = int(font_size_large * 0.55)
+
         try:
-            font_large = ImageFont.truetype("Inter-Bold.ttf", 72)
-            font_medium = ImageFont.truetype("Inter-SemiBold.ttf", 38)
-            font_small = ImageFont.truetype("Inter-Medium.ttf", 32)
+            font_large = ImageFont.truetype(font_file, font_size_large)
+            font_medium = ImageFont.truetype(font_file, font_size_medium)
         except:
-            try:
-                font_large = ImageFont.truetype("Inter-Regular.ttf", 72)
-                font_medium = ImageFont.truetype("Inter-Regular.ttf", 38)
-                font_small = ImageFont.truetype("Inter-Regular.ttf", 32)
-            except:
-                font_large = ImageFont.load_default()
-                font_medium = ImageFont.load_default()
-                font_small = ImageFont.load_default()
+            font_large = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
 
-        # 6. Draw Text (PREMIUM LAYOUT)
-        font_color = config.get('font_color', '#ffffff')
-        stats_color = config.get('stats_color', '#D2D5DA')
-        accent_color = config.get('bar_color', '#5865F2')
+        # 6. Draw CENTER-ALIGNED Text
+        text_color = "#000000" # Black text on White box
+        stats_color = "#3d3d3d" # Dark Grey stats
         
-        # Username (72px Bold) - Starts at X=225
-        draw.text((225, 70), f"@{name}", fill=font_color, font=font_large)
+        # Define the center of the white box
+        center_x = box_x + (box_w / 2) - 20 # Slight adjustment to center the text
 
-        # Accent Line (Thick 5px, perfectly under username)
+        # Draw Username (Center)
+        # Using anchor="mm" (middle middle) lets us center it perfectly by X and Y
+        draw.text((center_x, 85), f"@{name}", fill=text_color, font=font_large, anchor="mm")
+
+        # Draw Line under Username
         bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
-        text_width = bbox[2] - bbox[0]
-        line_y = 70 + 72 + 15
-        draw.line([(225, line_y), (225 + text_width, line_y)], fill=accent_color, width=5)
+        text_w = bbox[2] - bbox[0]
+        draw.line([center_x - (text_w/2), 110, center_x + (text_w/2), 110], fill=config.get('bar_color', '#5865F2'), width=3)
 
-        # Stats Text (Level 19 • XP 8.6K / 10K • Rank #2)
-        formatted_current = format_k(current_xp)
-        formatted_next = format_k(next_level_xp)
-        stats_text = f"Level {level} • XP {formatted_current} / {formatted_next} • Rank #{rank}"
-        draw.text((225, line_y + 20), stats_text, fill=stats_color, font=font_medium)
+        # Draw Level / XP / Rank
+        status_text = f"Level: 0   XP: {current_xp:,} / {next_level_xp:,}"
+        draw.text((center_x, 140), status_text, fill=stats_color, font=font_medium, anchor="mm")
 
-        # 7. Draw Progress Bar (Thicker, closer, softer colors)
-        bar_x = 225
-        bar_y = line_y + 75
-        bar_width = 740
-        bar_height = 40
-        radius = 20
+        # 7. Draw Progress Bar (Inside the box, at the bottom)
+        bar_x = box_x + 30
+        bar_y = box_y + box_h - 25
+        bar_width = box_w - 60
+        bar_height = 18
+        radius = 12
 
-        # Softer empty bar (#ECECEC)
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ECECEC")
+        # Draw empty grey bar (so it looks 3D/Arcane style)
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#e0e0e0")
         
-        # Filled colored bar
+        # Draw filled progress bar (Top layer)
         filled_width = bar_width * progress
         if filled_width > 0:
-            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=accent_color)
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
+        # Return the image
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
@@ -222,47 +213,98 @@ def get_card(user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# SIMPLIFIED ADMIN ROUTES (Only Backgrounds)
+# SECURE ADMIN ROUTES
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
 @basic_auth.required
 def admin_panel():
+    global admin_config
     message = ""
     
     if request.method == 'POST':
         if 'bg_image' in request.files and request.files['bg_image'].filename != '':
             file = request.files['bg_image']
-            img = Image.open(file.stream).convert("RGB").resize((1000, 300))
+            img = Image.open(file.stream).convert("RGB").resize((900, 250))
             img.save(DEFAULT_BG_FILE)
-            message = "✅ Default background uploaded! (1000x300)"
+            message = "✅ Default background uploaded! (900x250)"
+        
+        elif 'action' in request.form and request.form['action'] == 'save_settings':
+            admin_config['default_font'] = request.form.get('default_font', 'Inter')
+            admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
+            admin_config['default_bar_color'] = request.form.get('default_bar_color', '#5865F2')
+            admin_config['default_font_color'] = request.form.get('default_font_color', '#ffffff')
+            admin_config['default_stats_color'] = request.form.get('default_stats_color', '#b9bbbe')
+            admin_config['default_opacity'] = int(request.form.get('default_opacity', 0))
+            
+            with open(ADMIN_CONFIG_FILE, 'w') as f:
+                json.dump(admin_config, f, indent=4)
+            message = "✅ Admin settings updated successfully!"
     
     return f'''
     <!DOCTYPE html>
     <html>
     <head>
         <title>Admin Panel</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
         <style>
-            body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; text-align: center; padding: 50px; }}
-            .card {{ background: #2f3136; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 16px; border: 1px solid #40444b; }}
-            h1 {{ color: #45ddc0; }}
-            .upload-box {{ border: 2px dashed #40444b; padding: 30px; text-align: center; border-radius: 10px; margin: 20px 0; }}
-            input[type="file"] {{ display: block; margin: 10px auto; color: white; }}
-            button {{ background: #5865F2; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; }}
-            .msg {{ color: #45ddc0; margin-top: 20px; }}
+            body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; padding: 20px; text-align: center; }}
+            .card {{ background: #2f3136; max-width: 700px; margin: 20px auto; padding: 30px; border-radius: 16px; border: 1px solid #40444b; text-align: left; }}
+            h1, h2 {{ color: #45ddc0; }}
+            label {{ display: block; margin-top: 15px; font-weight: 600; color: #b9bbbe; }}
+            select, input, button {{ width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; box-sizing: border-box; }}
+            input[type="color"] {{ height: 50px; padding: 0; cursor: pointer; }}
+            input[type="number"] {{ width: 100px; }}
+            button {{ background: #5865F2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }}
+            button:hover {{ background: #4752c4; }}
+            .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
+            .upload-box {{ border: 2px dashed #40444b; padding: 20px; text-align: center; border-radius: 10px; margin-top: 10px; }}
+            .row {{ display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }}
         </style>
     </head>
     <body>
+        <h1>🛠️ Admin Control Panel</h1>
+        <div class="msg">{message}</div>
+
         <div class="card">
-            <h1>🛠️ Admin Panel</h1>
-            <p style="color:#b9bbbe;">Upload a 1000x300 default background image for un-customized cards.</p>
-            <div class="msg">{message}</div>
+            <h2>📷 Default Background</h2>
+            <p style="color:#b9bbbe;">Upload a 900x250 background image.</p>
             <form method="POST" enctype="multipart/form-data">
                 <div class="upload-box">
-                    <input type="file" name="bg_image" accept="image/png,image/jpeg">
-                    <button type="submit">Upload Default Background</button>
+                    <input type="file" name="bg_image" accept="image/png,image/jpeg" style="width:auto; display:inline-block;">
+                    <button type="submit" style="width:auto; padding: 10px 20px; margin-left:10px;">Upload</button>
                 </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ Global Default Settings</h2>
+            <p style="color:#b9bbbe;">These settings apply to all users who haven't customized them yet.</p>
+            <form method="POST">
+                <input type="hidden" name="action" value="save_settings">
+                
+                <label>Default Font Family</label>
+                <select name="default_font">
+                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter</option>
+                    <option value="Roboto" {"selected" if admin_config['default_font'] == 'Roboto' else ""}>Roboto</option>
+                    <option value="Open Sans" {"selected" if admin_config['default_font'] == 'Open Sans' else ""}>Open Sans</option>
+                    <option value="Montserrat" {"selected" if admin_config['default_font'] == 'Montserrat' else ""}>Montserrat</option>
+                </select>
+
+                <label>Default Font Size (px)</label>
+                <input type="number" name="default_font_size" value="{admin_config['default_font_size']}" min="20" max="100">
+
+                <label>Default Username Color</label>
+                <input type="color" name="default_font_color" value="{admin_config['default_font_color']}">
+
+                <label>Default Stats Color</label>
+                <input type="color" name="default_stats_color" value="{admin_config['default_stats_color']}">
+
+                <label>Default Progress Bar Color</label>
+                <input type="color" name="default_bar_color" value="{admin_config['default_bar_color']}">
+
+                <button type="submit" style="margin-top: 25px;">Save Global Settings</button>
             </form>
         </div>
     </body>
