@@ -1,4 +1,7 @@
-flask
+discord.py>=2.3.0
+aiohttp>=3.9.0
+python-dotenv>=1.0.0
 pillow
+flask
 requests
-python-dotenv
+flask-basicauth
