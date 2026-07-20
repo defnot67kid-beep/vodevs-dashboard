@@ -8,7 +8,6 @@ import requests
 app = Flask(__name__)
 
 CONFIG_FILE = "rank_configs.json"
-DATA_FILE = "level_data.json"
 FONT_PATH = "arial.ttf"  # Make sure this file is in your root folder!
 
 # Load user configurations
@@ -46,9 +45,10 @@ def get_card(user_id):
             "font_color": "#ffffff"
         })
 
-        # 2. Get XP and Progress from the URL parameters
-        # Example: /get_card/123?xp=1287&progress=0.50
-        xp = int(request.args.get('xp', 0))
+        # 2. Get data from the URL parameters
+        name = request.args.get('name', f'User {user_id[:4]}')
+        current_xp = int(request.args.get('xp', 0))
+        next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
 
         # 3. Fetch the user's avatar from Discord
@@ -62,53 +62,56 @@ def get_card(user_id):
                 mask = Image.new('L', avatar_img.size, 0)
                 draw_mask = ImageDraw.Draw(mask)
                 draw_mask.ellipse((0, 0, avatar_img.size[0], avatar_img.size[1]), fill=255)
-                avatar_img = ImageOps.fit(avatar_img, (100, 100), Image.LANCZOS)
-                mask = mask.resize((100, 100), Image.LANCZOS)
+                avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
+                mask = mask.resize((120, 120), Image.LANCZOS)
                 avatar_img.putalpha(mask)
             else:
                 avatar_img = None
         except:
             avatar_img = None
 
-        # 4. Create the card background (800x200)
-        img = Image.new('RGB', (800, 200), color=config.get('bg_color', '#2f3136'))
+        # 4. Create the card background (BIGGER: 1000x300)
+        canvas_width = 1000
+        canvas_height = 300
+        img = Image.new('RGB', (canvas_width, canvas_height), color=config.get('bg_color', '#2f3136'))
         draw = ImageDraw.Draw(img)
 
-        # 5. Draw the Avatar
+        # 5. Draw the Avatar (Bigger)
         if avatar_img:
-            img.paste(avatar_img, (50, 50), avatar_img)
+            img.paste(avatar_img, (60, 90), avatar_img)
 
         # 6. Load Fonts
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 36)
-            font_medium = ImageFont.truetype(FONT_PATH, 24)
-            font_small = ImageFont.truetype(FONT_PATH, 18)
+            font_large = ImageFont.truetype(FONT_PATH, 40)
+            font_medium = ImageFont.truetype(FONT_PATH, 28)
+            font_small = ImageFont.truetype(FONT_PATH, 22)
         except:
-            # Fallback to default if font file is missing
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # 7. Draw Username
+        # 7. Draw Username (Bigger, better placement)
         font_color = config.get('font_color', '#ffffff')
-        draw.text((170, 55), f"@{user_id[:10]}", fill=font_color, font=font_large)
+        draw.text((220, 95), name, fill=font_color, font=font_large)
 
-        # 8. Draw XP Bar
-        bar_x = 170
-        bar_y = 120
-        bar_width = 580
-        bar_height = 25
-        radius = 12
+        # 8. Draw "XP: current / next" text
+        xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
+        draw.text((220, 150), xp_text, fill="#b9bbbe", font=font_small)
+
+        # 9. Draw XP Bar (Bigger)
+        bar_x = 220
+        bar_y = 190
+        bar_width = 720
+        bar_height = 35
+        radius = 18
 
         # Draw background of bar (gray)
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2c2f33")
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#40444b")
         
         # Draw filled progress bar (color)
         filled_width = bar_width * progress
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
-
-        # 9. Draw XP Text inside/under the bar
-        draw.text((bar_x + 10, bar_y + 5), f"XP: {xp:,}", fill="#ffffff", font=font_small)
+        if filled_width > 0:
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
         # Return the image
         img_io = io.BytesIO()
