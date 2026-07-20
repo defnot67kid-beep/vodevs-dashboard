@@ -95,8 +95,9 @@ def upload_bg(user_id):
 @app.route('/get_card/<user_id>')
 def get_card(user_id):
     try:
-        # 1. Get data from URL parameters
+        # 1. Get data from URL parameters (NOW INCLUDING LEVEL!)
         name = request.args.get('name', f'User')
+        level = int(request.args.get('level', 0))  # <--- FIXED THE LEVEL 0 BUG HERE
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
@@ -108,12 +109,12 @@ def get_card(user_id):
         
         config = {
             "bg_color": user_conf.get('bg_color', "#2f3136"),
-            "bar_color": user_conf.get('bar_color', "#5865F2"), # HARDCODED DEFAULT
-            "opacity": user_conf.get('opacity', 90),           # HARDCODED DEFAULT
-            "font_color": user_conf.get('font_color', "#ffffff"), # HARDCODED DEFAULT
-            "stats_color": user_conf.get('stats_color', "#b9bbbe"), # HARDCODED DEFAULT
-            "font_family": user_conf.get('font_family', "Inter"), # HARDCODED DEFAULT
-            "font_size": user_conf.get('font_size', 56)        # HARDCODED DEFAULT (MASSIVE!)
+            "bar_color": user_conf.get('bar_color', "#5865F2"),
+            "opacity": user_conf.get('opacity', 45),     # Reduced to 45 for beautiful backgrounds
+            "font_color": user_conf.get('font_color', "#ffffff"),
+            "stats_color": user_conf.get('stats_color', "#D2D5DA"),
+            "font_family": user_conf.get('font_family', "Inter"),
+            "font_size": user_conf.get('font_size', 72)
         }
 
         # 3. Create Canvas (1000x300)
@@ -128,13 +129,13 @@ def get_card(user_id):
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
 
-        # Apply Overlay (Opacity)
-        overlay_strength = int(config.get('opacity', 90))
+        # Apply Overlay (45% Opacity)
+        overlay_strength = int(config.get('opacity', 45))
         if overlay_strength > 0:
             overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, overlay_strength))
             img.paste(overlay, (0, 0), overlay)
 
-        # 4. Avatar
+        # 4. Avatar (150x150 with 4px White Border)
         avatar_img = None
         if avatar_url:
             try:
@@ -142,66 +143,75 @@ def get_card(user_id):
                 resp = requests.get(avatar_url, headers=headers, timeout=5)
                 if resp.status_code == 200:
                     avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    mask = Image.new('L', (120, 120), 0)
+                    mask = Image.new('L', (150, 150), 0)
                     draw_mask = ImageDraw.Draw(mask)
-                    draw_mask.ellipse((0, 0, 120, 120), fill=255)
-                    avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
+                    draw_mask.ellipse((0, 0, 150, 150), fill=255)
+                    avatar_img = ImageOps.fit(avatar_img, (150, 150), Image.LANCZOS)
                     avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (40, 90), avatar_img)
+                    img.paste(avatar_img, (40, 70), avatar_img)
+                    
+                    # Draw thin 4px white border around avatar
+                    draw.ellipse([37, 67, 193, 223], outline="#ffffff", width=4)
             except Exception as e:
                 print(f"⚠️ Avatar error: {e}")
 
-        # 5. Load Font (Dynamic based on user choice, defaults to Inter)
+        # 5. Load Font (Inter Bold, SemiBold, and Medium)
         font_name = config.get('font_family', "Inter")
         font_path_map = {
-            "Inter": "Inter-Regular.ttf",
-            "Roboto": "Roboto-Regular.ttf",
-            "Open Sans": "OpenSans-Regular.ttf",
-            "Montserrat": "Montserrat-Regular.ttf"
+            "Inter": "Inter-Bold.ttf",
+            "Roboto": "Roboto-Bold.ttf",
+            "Open Sans": "OpenSans-Bold.ttf",
+            "Montserrat": "Montserrat-Bold.ttf"
         }
-        font_file = font_path_map.get(font_name, "Inter-Regular.ttf")
-        
-        font_size_large = int(config.get('font_size', 56))
-        font_size_medium = int(font_size_large * 0.6)
-
+        # Try to load bold, fall back to regular, fall back to default
         try:
-            font_large = ImageFont.truetype(font_file, font_size_large)
-            font_medium = ImageFont.truetype(font_file, font_size_medium)
+            font_large = ImageFont.truetype("Inter-Bold.ttf", 72)
+            font_medium = ImageFont.truetype("Inter-SemiBold.ttf", 38)
+            font_small = ImageFont.truetype("Inter-Medium.ttf", 32)
         except:
-            font_large = ImageFont.load_default()
-            font_medium = ImageFont.load_default()
+            try:
+                font_large = ImageFont.truetype("Inter-Regular.ttf", 72)
+                font_medium = ImageFont.truetype("Inter-Regular.ttf", 38)
+                font_small = ImageFont.truetype("Inter-Regular.ttf", 32)
+            except:
+                font_large = ImageFont.load_default()
+                font_medium = ImageFont.load_default()
+                font_small = ImageFont.load_default()
 
-        # 6. Draw Text (Massive and aligned!)
+        # 6. Draw Text (PREMIUM LAYOUT)
         font_color = config.get('font_color', '#ffffff')
-        stats_color = config.get('stats_color', '#b9bbbe')
+        stats_color = config.get('stats_color', '#D2D5DA')
+        accent_color = config.get('bar_color', '#5865F2')
         
-        # Username (Moved down to fit huge text)
-        draw.text((190, 65), f"@{name}", fill=font_color, font=font_large)
+        # Username (72px Bold) - Starts at X=225
+        draw.text((225, 70), f"@{name}", fill=font_color, font=font_large)
 
-        # Accent Line under username
+        # Accent Line (Thick 5px, perfectly under username)
         bbox = draw.textbbox((0, 0), f"@{name}", font=font_large)
         text_width = bbox[2] - bbox[0]
-        line_y = 65 + font_size_large + 8
-        draw.line([(190, line_y), (190 + text_width, line_y)], fill=config.get('bar_color', '#5865F2'), width=5)
+        line_y = 70 + 72 + 15
+        draw.line([(225, line_y), (225 + text_width, line_y)], fill=accent_color, width=5)
 
-        # Stats Text (Using K format!)
+        # Stats Text (Level 19 • XP 8.6K / 10K • Rank #2)
         formatted_current = format_k(current_xp)
         formatted_next = format_k(next_level_xp)
-        stats_text = f"Level: 0  XP: {formatted_current} / {formatted_next}  Rank: #{rank}"
-        draw.text((190, 115), stats_text, fill=stats_color, font=font_medium)
+        stats_text = f"Level {level} • XP {formatted_current} / {formatted_next} • Rank #{rank}"
+        draw.text((225, line_y + 20), stats_text, fill=stats_color, font=font_medium)
 
-        # 7. Draw Progress Bar (Moved down for huge text)
-        bar_x = 190
-        bar_y = 165
-        bar_width = 770
-        bar_height = 32
-        radius = 16
+        # 7. Draw Progress Bar (Thicker, closer, softer colors)
+        bar_x = 225
+        bar_y = line_y + 75
+        bar_width = 740
+        bar_height = 40
+        radius = 20
 
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ffffff")
+        # Softer empty bar (#ECECEC)
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#ECECEC")
         
+        # Filled colored bar
         filled_width = bar_width * progress
         if filled_width > 0:
-            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=accent_color)
 
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
