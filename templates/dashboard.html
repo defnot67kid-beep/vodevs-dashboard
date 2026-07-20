@@ -4,62 +4,151 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Rank Card</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; background: #1e1e2e; color: white; padding: 20px; text-align: center; }
-        .container { max-width: 600px; margin: 0 auto; background: #2f3136; padding: 20px; border-radius: 12px; }
-        .preview { width: 100%; height: 200px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #444; }
-        .control-group { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
-        input[type="color"] { border: none; width: 40px; height: 40px; cursor: pointer; background: transparent; }
-        input[type="range"] { width: 60%; }
-        .btn { background: #45ddc0; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        .btn:hover { background: #3bc9b0; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: #2f3136; padding: 30px; border-radius: 16px; border: 1px solid #40444b; }
+        
+        .header { text-align: center; margin-bottom: 20px; }
+        .preview-container { background: #202225; border-radius: 12px; padding: 10px; margin-bottom: 25px; border: 2px solid #40444b; }
+        .preview-img { width: 100%; max-width: 700px; height: auto; border-radius: 8px; display: block; margin: 0 auto; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        
+        .card-box { background: #36393f; padding: 15px; border-radius: 10px; }
+        label { display: block; font-weight: 600; margin-bottom: 5px; color: #b9bbbe; font-size: 0.9em; }
+        select, input[type="color"], input[type="range"] { width: 100%; margin-top: 5px; }
+        select { padding: 8px; background: #2f3136; color: white; border: 1px solid #40444b; border-radius: 6px; font-size: 16px; }
+        input[type="color"] { height: 40px; border: none; background: transparent; cursor: pointer; padding: 0; }
+        input[type="range"] { accent-color: #5865F2; height: 6px; }
+
+        .btn-save { background: #5865F2; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; font-size: 18px; cursor: pointer; width: 100%; margin-top: 25px; transition: 0.2s; }
+        .btn-save:hover { background: #4752c4; transform: scale(1.02); }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
     </style>
 </head>
 <body>
+
 <div class="container">
-    <h2>🎨 Edit Rank Card</h2>
-    <div class="preview" id="preview" style="background: {{ config.bg_color or '#2f3136' }};"></div>
-
-    <div class="control-group">
-        <label>Progress Bar Color</label>
-        <input type="color" id="bar_color" value="{{ config.bar_color or '#5865F2' }}" onchange="updatePreview()">
+    <div class="header">
+        <h1>🎨 Edit Rank Card</h1>
+        <p style="color: #b9bbbe;">Customize your visual rank card.</p>
     </div>
 
-    <div class="control-group">
-        <label>Opacity</label>
-        <input type="range" id="opacity" min="0" max="100" value="{{ config.opacity or 100 }}" onchange="updatePreview()">
+    <div class="preview-container">
+        <img src="" id="previewImg" class="preview-img" alt="Card Preview">
     </div>
 
-    <div class="control-group">
-        <label>Background Color</label>
-        <input type="color" id="bg_color" value="{{ config.bg_color or '#2f3136' }}" onchange="updatePreview()">
+    <div class="grid">
+        <!-- Font & Text Section -->
+        <div class="card-box">
+            <h3>Typography</h3>
+            <label>Font Family</label>
+            <select id="font_family">
+                <option value="Inter">Inter (Default)</option>
+                <option value="Roboto">Roboto</option>
+                <option value="Open Sans">Open Sans</option>
+                <option value="Montserrat">Montserrat</option>
+            </select>
+            
+            <label style="margin-top: 15px;">Username Color</label>
+            <input type="color" id="font_color" value="#ffffff">
+
+            <label style="margin-top: 15px;">Statistics Color (Level/XP)</label>
+            <input type="color" id="stats_color" value="#b9bbbe">
+        </div>
+
+        <!-- Bar & Background Section -->
+        <div class="card-box">
+            <h3>Visuals</h3>
+            <label>Progress Bar Color</label>
+            <input type="color" id="bar_color" value="#5865F2">
+
+            <label style="margin-top: 15px;">Background Opacity (Darkness)</label>
+            <input type="range" id="opacity" min="0" max="150" value="100">
+            <div style="font-size: 0.8em; color: #b9bbbe; margin-top: 5px;">0 = Fully Transparent, 150 = Fully Dark</div>
+            
+            <label style="margin-top: 15px;">Background Color (Fallback)</label>
+            <input type="color" id="bg_color" value="#2f3136">
+        </div>
     </div>
 
-    <button class="btn" onclick="saveCard()">💾 Save Card</button>
+    <button class="btn-save" id="saveBtn" onclick="saveCard()">💾 Save Customizations</button>
 </div>
 
 <script>
+    // Load saved config on page load
+    const user_id = "{{ user_id }}";
+    let config = {{ config | tojson }};
+
+    // Apply saved settings to inputs
+    document.getElementById('font_family').value = config.font_family || 'Inter';
+    document.getElementById('font_color').value = config.font_color || '#ffffff';
+    document.getElementById('stats_color').value = config.stats_color || '#b9bbbe';
+    document.getElementById('bar_color').value = config.bar_color || '#5865F2';
+    document.getElementById('opacity').value = config.opacity || 100;
+    document.getElementById('bg_color').value = config.bg_color || '#2f3136';
+
+    // Live Preview Logic
     function updatePreview() {
-        document.getElementById('preview').style.backgroundColor = document.getElementById('bg_color').value;
-        document.getElementById('preview').style.opacity = document.getElementById('opacity').value / 100;
+        const formData = {
+            font_family: document.getElementById('font_family').value,
+            font_color: document.getElementById('font_color').value,
+            stats_color: document.getElementById('stats_color').value,
+            bar_color: document.getElementById('bar_color').value,
+            opacity: document.getElementById('opacity').value,
+            bg_color: document.getElementById('bg_color').value
+        };
+
+        // Build query string for preview
+        const params = new URLSearchParams(formData);
+        // We use a mock user_id for preview because the backend needs a real ID to fetch XP
+        document.getElementById('previewImg').src = `/get_card/${user_id}?${params.toString()}`;
     }
 
+    // Preview on every change
+    document.querySelectorAll('select, input').forEach(input => {
+        input.addEventListener('input', updatePreview);
+        input.addEventListener('change', updatePreview);
+    });
+
+    // Save Logic
     async function saveCard() {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
         const data = {
+            font_family: document.getElementById('font_family').value,
+            font_color: document.getElementById('font_color').value,
+            stats_color: document.getElementById('stats_color').value,
             bar_color: document.getElementById('bar_color').value,
             opacity: parseInt(document.getElementById('opacity').value),
             bg_color: document.getElementById('bg_color').value
         };
 
-        const res = await fetch(`/save_config/{{ user_id }}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        alert("✅ Card saved! Go back to Discord and run !level to see your new rank card.");
+        try {
+            const res = await fetch(`/save_config/${user_id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if(res.ok) {
+                alert("✅ Settings saved! Run !level in Discord to see your new card.");
+            } else {
+                alert("❌ Error saving settings.");
+            }
+        } catch (e) {
+            alert("❌ Network error.");
+        }
+
+        btn.disabled = false;
+        btn.innerText = "💾 Save Customizations";
     }
 
+    // Trigger first preview
     updatePreview();
 </script>
 </body>
