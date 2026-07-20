@@ -96,6 +96,17 @@ def upload_bg(user_id):
     img.save(filepath)
     return "Uploaded", 200
 
+@app.route('/remove_bg/<user_id>', methods=['POST'])
+def remove_bg(user_id):
+    filepath = os.path.join(USER_BG_FOLDER, f"{user_id}.png")
+    if os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+            return "Removed", 200
+        except:
+            return "Failed to remove", 500
+    return "No file found", 200
+
 @app.route('/get_card/<user_id>')
 def get_card(user_id):
     try:
