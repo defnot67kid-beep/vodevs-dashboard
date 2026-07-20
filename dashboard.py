@@ -60,7 +60,6 @@ def get_card(user_id):
         avatar_url = request.args.get('avatar')
 
         # 2. Load User Config (or defaults)
-        # We also read the 6 new customization settings
         config = configs.get(user_id, {
             "bg_color": "#2f3136",
             "bar_color": "#5865F2",
