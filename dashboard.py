@@ -19,7 +19,7 @@ basic_auth = BasicAuth(app)
 # CONFIGURATION
 # ==========================================
 CONFIG_FILE = "rank_configs.json"
-DEFAULT_BG_FILE = "default_bg.png"  # The default background image file
+DEFAULT_BG_FILE = "default_bg.png"
 FONT_PATH = "arial.ttf"
 
 # Load user configurations
@@ -73,106 +73,92 @@ def get_card(user_id):
         else:
             bg_img = Image.new('RGB', (1000, 300), color=config.get('bg_color', '#2f3136'))
 
-        # 2. Add a semi-transparent dark layer so text pops!
+        # 2. Add a semi-transparent dark layer
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
         overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, 140))
         img.paste(overlay, (0, 0), overlay)
 
         # ==========================================
-        # 3. AVATAR FETCH (Fixed position & size)
+        # 3. BULLETPROOF AVATAR FETCHER
         # ==========================================
         avatar_img = None
-        avatar_success = False
-
+        
         try:
-            # Method A: Classic .png format with forced 512 size
             cdn_headers = {'User-Agent': 'Mozilla/5.0'}
-            avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png?size=512"
-            resp = requests.get(avatar_url, headers=cdn_headers, timeout=3)
+            # Get the user's avatar hash and discriminator from Discord's API
+            api_url = f"https://discord.com/api/v10/users/{user_id}"
+            api_resp = requests.get(api_url, headers=cdn_headers, timeout=3)
             
-            if resp.status_code == 200:
-                avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                avatar_success = True
-
-            # Method B: .webp if .png failed
-            if not avatar_success:
-                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.webp?size=512"
-                resp = requests.get(avatar_url, headers=cdn_headers, timeout=3)
-                if resp.status_code == 200:
-                    avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    avatar_success = True
-
-            # Process and paste the avatar (BIGGER: 120x120)
-            if avatar_success and avatar_img:
-                # Create a circular mask
-                mask = Image.new('L', (120, 120), 0)
-                draw_mask = ImageDraw.Draw(mask)
-                draw_mask.ellipse((0, 0, 120, 120), fill=255)
+            avatar_url = None
+            
+            if api_resp.status_code == 200:
+                user_data = api_resp.json()
+                avatar_hash = user_data.get('avatar')
+                discriminator = user_data.get('discriminator', '0')
                 
-                # Resize and apply mask
-                avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
-                avatar_img.putalpha(mask)
-                
-                # Paste the avatar onto the card (X=45, Y=90) - centered left
-                img.paste(avatar_img, (45, 90), avatar_img)
-
-            # Fallback: If no avatar, draw a gray circle with "?"
-            if not avatar_success:
-                print("⚠️ No avatar found. Drawing placeholder circle.")
-                draw.ellipse([45, 90, 165, 210], fill="#36393f", outline="#5865F2", width=4)
-                draw.text((105, 150), "?", fill="#ffffff", font=ImageFont.load_default(), anchor="mm")
+                if avatar_hash:
+                    # Custom avatar (Standard or Animated)
+                    ext = "gif" if avatar_hash.startswith("a_") else "png"
+                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=512"
+                else:
+                    # Default Discord Avatar
+                    # Discord calculates default avatar based on (user_id >> 22) % 6
+                    default_avatar_id = (int(user_id) >> 22) % 6
+                    avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
+            
+            # Download and process the image
+            if avatar_url:
+                img_resp = requests.get(avatar_url, headers=cdn_headers, timeout=5)
+                if img_resp.status_code == 200:
+                    avatar_img = Image.open(io.BytesIO(img_resp.content)).convert("RGBA")
+                    
+                    # Circular mask
+                    mask = Image.new('L', (120, 120), 0)
+                    draw_mask = ImageDraw.Draw(mask)
+                    draw_mask.ellipse((0, 0, 120, 120), fill=255)
+                    
+                    avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
+                    avatar_img.putalpha(mask)
+                    img.paste(avatar_img, (45, 90), avatar_img)
 
         except Exception as e:
             print(f"⚠️ Avatar block error: {e}")
-            try:
-                draw.ellipse([45, 90, 165, 210], fill="#36393f", outline="#5865F2", width=4)
-                draw.text((105, 150), "?", fill="#ffffff", font=ImageFont.load_default(), anchor="mm")
-            except:
-                pass
 
         # ==========================================
-        # 4. LOAD FONTS (Removes the Square Box)
+        # 4. LOAD FONTS
         # ==========================================
         try:
-            # Using Arial, BUT we replace unsupported emojis with text to prevent the square box!
             font_large = ImageFont.truetype(FONT_PATH, 50)
             font_medium = ImageFont.truetype(FONT_PATH, 30)
             font_small = ImageFont.truetype(FONT_PATH, 22)
         except:
-            print("⚠️ WARNING: arial.ttf not found. Using default font.")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # 5. Draw Username (X=220, Y=80)
+        # 5. Draw Username (Removes emojis to prevent the square)
         font_color = config.get('font_color', '#ffffff')
-        # We remove emojis from the name to prevent the square box
         clean_name = ''.join(c for c in name if c.isalnum() or c in (' ', '-', '_', '.'))
         draw.text((220, 80), clean_name, fill=font_color, font=font_large)
 
-        # 6. Draw XP Text (X=220, Y=145)
+        # 6. Draw XP Text
         xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((220, 145), xp_text, fill="#b9bbbe", font=font_medium)
 
-        # ==========================================
-        # 7. Draw XP Bar (Fixed alignment)
-        # ==========================================
+        # 7. Draw XP Bar
         bar_x = 220
         bar_y = 195
         bar_width = 720
-        bar_height = 35  # Nice thickness
+        bar_height = 35
         radius = 18
 
-        # Draw empty bar background
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2f3136")
         
-        # Draw filled progress bar
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
 
-        # Return the image
         img_io = io.BytesIO()
         img.save(img_io, 'PNG')
         img_io.seek(0)
@@ -182,13 +168,12 @@ def get_card(user_id):
         return f"❌ Image generation failed: {e}", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES (Owner Only)
+# SECURE ADMIN ROUTES
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
 @basic_auth.required
 def admin_panel():
-    """Admin panel to upload the default background image."""
     message = ""
     if request.method == 'POST':
         if 'bg_image' not in request.files:
