@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask_basicauth import BasicAuth
+from flask_session import Session
 from authlib.integrations.flask_client import OAuth
 import json
 import os
@@ -8,7 +9,16 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# ==========================================
+# SESSION CONFIG (CRITICAL FIX FOR RAILWAY)
+# ==========================================
+app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_FILE_DIR'] = './flask_session/'
+Session(app)
 
 # FORCE HTTPS FOR URL GENERATION
 app.config['PREFERRED_URL_SCHEME'] = 'https'
@@ -84,7 +94,6 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
-    # Force the EXACT redirect URI that Discord expects
     redirect_uri = "https://vodevs-dashboard-production.up.railway.app/authorize"
     return discord.authorize_redirect(redirect_uri)
 
@@ -95,7 +104,6 @@ def authorize():
         resp = discord.get('users/@me', token=token)
         user_info = resp.json()
         
-        # Store the user's ID in the session
         session['user_id'] = user_info['id']
         
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
@@ -108,12 +116,10 @@ def dashboard(guild_id, user_id):
     if 'user_id' not in session or session['user_id'] != user_id:
         return "🚫 Unauthorized access. This card belongs to someone else.", 403
     
-    # Dynamically load available fonts
     font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     if not font_files:
         font_files = ["Inter"]
     
-    # Load config based on GUILD_ID + USER_ID
     config_key = f"{guild_id}_{user_id}"
     user_config = configs.get(config_key, {})
     
