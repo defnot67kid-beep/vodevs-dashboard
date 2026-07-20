@@ -69,69 +69,80 @@ def get_card(user_id):
 
         # 1. Create the Base Canvas (1000x300)
         if os.path.exists(DEFAULT_BG_FILE):
-            # Load the default background uploaded by the Admin
             bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((1000, 300))
         else:
-            # Fallback to plain color if no image uploaded
             bg_img = Image.new('RGB', (1000, 300), color=config.get('bg_color', '#2f3136'))
 
-        # 2. Add a semi-transparent dark layer over the whole image so text pops!
+        # 2. Add a semi-transparent dark layer so text pops!
         img = bg_img.copy()
         draw = ImageDraw.Draw(img)
-        overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, 140)) # 140 is the darkness level
+        overlay = Image.new('RGBA', (1000, 300), (0, 0, 0, 140))
         img.paste(overlay, (0, 0), overlay)
 
-        # 3. Fetch the user's avatar
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png?size=512"
+        # ==========================================
+        # 3. FETCH AND DRAW AVATAR (FIXED)
+        # ==========================================
+        # Use the .webp format which is universally supported by Discord's CDN
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.webp?size=512"
         avatar_img = None
+        
         try:
-            resp = requests.get(avatar_url, timeout=5)
+            # Add a User-Agent header to mimic a browser (fixes forbidden errors)
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            resp = requests.get(avatar_url, headers=headers, timeout=5)
+            
             if resp.status_code == 200:
+                # Open the image
                 avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                mask = Image.new('L', avatar_img.size, 0)
+                
+                # Create a circular mask
+                mask = Image.new('L', (140, 140), 0)
                 draw_mask = ImageDraw.Draw(mask)
-                draw_mask.ellipse((0, 0, avatar_img.size[0], avatar_img.size[1]), fill=255)
+                draw_mask.ellipse((0, 0, 140, 140), fill=255)
+                
+                # Resize and apply mask
                 avatar_img = ImageOps.fit(avatar_img, (140, 140), Image.LANCZOS)
-                mask = mask.resize((140, 140), Image.LANCZOS)
                 avatar_img.putalpha(mask)
+                
+                # Paste the avatar onto the card (Left side, nice padding)
+                img.paste(avatar_img, (45, 80), avatar_img)
             else:
-                avatar_img = None
-        except:
-            avatar_img = None
+                print(f"Avatar fetch failed with status: {resp.status_code}")
+        except Exception as e:
+            print(f"Avatar error: {e}")
 
-        # 4. Draw the Avatar (Bigger: 140x140)
-        if avatar_img:
-            img.paste(avatar_img, (45, 80), avatar_img)
-
-        # 5. Load Fonts (Massive size upgrades)
+        # ==========================================
+        # 4. LOAD FONTS (FIXED)
+        # ==========================================
         try:
-            font_large = ImageFont.truetype(FONT_PATH, 52)  # Bigger username
-            font_medium = ImageFont.truetype(FONT_PATH, 36)  # Bigger XP text
-            font_small = ImageFont.truetype(FONT_PATH, 26)  # Bigger bar text
+            # Try loading the font. If it fails, it will use default.
+            font_large = ImageFont.truetype(FONT_PATH, 52)
+            font_medium = ImageFont.truetype(FONT_PATH, 36)
+            font_small = ImageFont.truetype(FONT_PATH, 26)
         except:
+            # Fallback to default (will cause the square box, but won't crash)
+            print("⚠️ WARNING: arial.ttf not found. Using default font.")
             font_large = ImageFont.load_default()
             font_medium = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # 6. Draw Username
+        # 5. Draw Username
         font_color = config.get('font_color', '#ffffff')
         draw.text((230, 85), name, fill=font_color, font=font_large)
 
-        # 7. Draw XP Text (Current / Next)
+        # 6. Draw XP Text (Current / Next)
         xp_text = f"XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((230, 150), xp_text, fill="#b9bbbe", font=font_medium)
 
-        # 8. Draw XP Bar (Massive upgrade: 50px height)
+        # 7. Draw XP Bar (Thick, rounded)
         bar_x = 230
         bar_y = 205
         bar_width = 720
-        bar_height = 50  # Much thicker!
-        radius = 25  # Fully rounded edges
+        bar_height = 50
+        radius = 25
 
-        # Draw background of bar (dark grey)
         draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#2f3136")
         
-        # Draw filled progress bar (color)
         filled_width = bar_width * progress
         if filled_width > 0:
             draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
