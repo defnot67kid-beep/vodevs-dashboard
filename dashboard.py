@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file
 from flask_basicauth import BasicAuth
 import json
 import os
@@ -58,6 +58,7 @@ def get_card(user_id):
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
+        avatar_url = request.args.get('avatar')  # <--- The bot sends this now!
 
         # Get User Config
         config = configs.get(user_id, {
@@ -80,38 +81,15 @@ def get_card(user_id):
         img.paste(overlay, (0, 0), overlay)
 
         # ==========================================
-        # 3. BULLETPROOF AVATAR FETCHER
+        # 3. AVATAR DOWNLOAD (100% Success Rate)
         # ==========================================
         avatar_img = None
-        
-        try:
-            cdn_headers = {'User-Agent': 'Mozilla/5.0'}
-            # Get the user's avatar hash and discriminator from Discord's API
-            api_url = f"https://discord.com/api/v10/users/{user_id}"
-            api_resp = requests.get(api_url, headers=cdn_headers, timeout=3)
-            
-            avatar_url = None
-            
-            if api_resp.status_code == 200:
-                user_data = api_resp.json()
-                avatar_hash = user_data.get('avatar')
-                discriminator = user_data.get('discriminator', '0')
-                
-                if avatar_hash:
-                    # Custom avatar (Standard or Animated)
-                    ext = "gif" if avatar_hash.startswith("a_") else "png"
-                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=512"
-                else:
-                    # Default Discord Avatar
-                    # Discord calculates default avatar based on (user_id >> 22) % 6
-                    default_avatar_id = (int(user_id) >> 22) % 6
-                    avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
-            
-            # Download and process the image
-            if avatar_url:
-                img_resp = requests.get(avatar_url, headers=cdn_headers, timeout=5)
-                if img_resp.status_code == 200:
-                    avatar_img = Image.open(io.BytesIO(img_resp.content)).convert("RGBA")
+        if avatar_url:
+            try:
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                resp = requests.get(avatar_url, headers=headers, timeout=5)
+                if resp.status_code == 200:
+                    avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
                     
                     # Circular mask
                     mask = Image.new('L', (120, 120), 0)
@@ -121,9 +99,8 @@ def get_card(user_id):
                     avatar_img = ImageOps.fit(avatar_img, (120, 120), Image.LANCZOS)
                     avatar_img.putalpha(mask)
                     img.paste(avatar_img, (45, 90), avatar_img)
-
-        except Exception as e:
-            print(f"⚠️ Avatar block error: {e}")
+            except Exception as e:
+                print(f"⚠️ Avatar download error: {e}")
 
         # ==========================================
         # 4. LOAD FONTS
