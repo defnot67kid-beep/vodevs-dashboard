@@ -40,6 +40,7 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
+DATA_FILE = "level_data.json"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -66,7 +67,7 @@ else:
     }
 
 # ==========================================
-# ROUTES
+# PUBLIC ROUTES
 # ==========================================
 
 @app.route('/')
@@ -199,7 +200,7 @@ def get_card(guild_id, user_id):
     try:
         name = request.args.get('name', f'User')
         level = int(request.args.get('level', 0))
-        rank = int(request.args.get('rank', 0))  # <--- FIX: Read rank from URL
+        rank = int(request.args.get('rank', 0))
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
@@ -265,7 +266,7 @@ def get_card(guild_id, user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 6. Draw Text (Uses the 'level' and 'rank' variables)
+        # 6. Draw Text
         text_color = "#000000"
         stats_color = "#3d3d3d"
         center_x = box_x + (box_w / 2) - 10
@@ -301,6 +302,75 @@ def get_card(guild_id, user_id):
     except Exception as e:
         print(f"❌ ERROR: {e}")
         return f"❌ Image generation failed", 500
+
+# ==========================================
+# NEW: WEB LEADERBOARD SYSTEM
+# ==========================================
+
+@app.route('/leaderboard/<server_name>')
+def web_leaderboard(server_name):
+    # Load the level data
+    if not os.path.exists(DATA_FILE):
+        return "No level data found.", 404
+        
+    with open(DATA_FILE, 'r') as f:
+        level_data = json.load(f)
+    
+    # Try to find the matching Guild ID
+    target_guild_id = None
+    
+    # If the URL is exactly "VoDevs", map it to your known ID
+    if server_name.lower() == "vodevs":
+        target_guild_id = "1526989768595083384"
+    
+    # If we didn't find it, search the data for IDs
+    if target_guild_id is None:
+        for gid in level_data.keys():
+            target_guild_id = gid
+            break
+    
+    if target_guild_id is None or target_guild_id not in level_data:
+        return f"No data found for server '{server_name}'.", 404
+        
+    guild_data = level_data[target_guild_id]
+    
+    # Sort users by XP (descending) and take top 100
+    sorted_users = sorted(guild_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:100]
+    
+    formatted_users = []
+    
+    # Helper to format XP like 590.3K or 1.2M
+    def format_xp(xp):
+        if xp >= 1000000:
+            return f"{xp/1000000:.1f}M"
+        elif xp >= 1000:
+            return f"{xp/1000:.1f}K"
+        else:
+            return str(xp)
+            
+    # Helper to calculate level from XP (must match your bot's math!)
+    def get_level_from_xp(xp):
+        level = 0
+        while int(1000 * ((level + 1) ** 1.5)) <= xp:
+            level += 1
+        return level
+    
+    for user_id, data in sorted_users:
+        xp = data["xp"]
+        level = get_level_from_xp(xp)
+        xp_formatted = format_xp(xp)
+        
+        # Build Avatar URL (Standard Discord CDN)
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
+        
+        formatted_users.append({
+            "username": f"User {user_id[:4]}",
+            "avatar_url": avatar_url,
+            "level": level,
+            "xp_formatted": xp_formatted
+        })
+        
+    return render_template('leaderboard.html', server_name=server_name, users=formatted_users)
 
 # ==========================================
 # SECURE ADMIN ROUTES
