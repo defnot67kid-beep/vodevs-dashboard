@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #1e1e2e;
+            color: #ffffff;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h1 { font-size: 28px; margin: 0; }
+        .header .btn-back {
+            background: #5865F2;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .table-wrapper {
+            background: #2f3136;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #40444b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 15px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 15px;
+            color: #b9bbbe;
+            font-weight: 600;
+            border-bottom: 2px solid #40444b;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #40444b;
+            vertical-align: middle;
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        .rank-col { width: 50px; font-weight: 700; color: #b9bbbe; text-align: center; }
+        .rank-1 { color: #ffd700; } /* Gold */
+        .rank-2 { color: #c0c0c0; } /* Silver */
+        .rank-3 { color: #cd7f32; } /* Bronze */
+
+        .user-col { display: flex; align-items: center; gap: 12px; }
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #40444b;
+            object-fit: cover;
+        }
+        .username { font-weight: 600; color: #ffffff; }
+
+        .xp-col { font-weight: 600; color: #b9bbbe; }
+        .level-col { font-weight: 600; color: #b9bbbe; }
+
+        @media (max-width: 600px) {
+            .header { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .level-col, th:nth-child(3) { display: none; } /* Hide Level on mobile */
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>{{ server_name }}</h1>
+        <a href="javascript:history.back()" class="btn-back">← Go Back</a>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>User</th>
+                    <th>Level</th>
+                    <th>XP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td class="rank-col {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
+                        #{{ loop.index }}
+                    </td>
+                    <td>
+                        <div class="user-col">
+                            <img src="{{ user.avatar_url }}" class="avatar" alt="avatar">
+                            <span class="username">{{ user.username }}</span>
+                        </div>
+                    </td>
+                    <td class="level-col">{{ user.level }}</td>
+                    <td class="xp-col">{{ user.xp_formatted }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
