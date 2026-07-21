@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # ==========================================
 # SESSION CONFIG (Fixed for Railway)
-# ==========================================
+# ========================================== 
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
