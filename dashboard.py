@@ -3,7 +3,7 @@ from flask_basicauth import BasicAuth
 import json
 import os
 import io
-import uuid
+import sqlite3
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
@@ -40,7 +40,7 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
-DATA_FILE = "level_data.json"
+DB_FILE = "level_data.db"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -120,20 +120,18 @@ def authorize():
         # Store user ID in session
         session['user_id'] = user_info['id']
         
-        # Redirect to dashboard (Use 0 as the guild_id, but we'll fix the route later)
+        # Redirect to dashboard
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
         return f"❌ Login failed: {e}"
 
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
-    # FIX 1: Check if the user is logged in via session
+    # SECURITY CHECK: Ensure the logged-in user is accessing their own card
     if 'user_id' not in session:
-        # If they are not logged in, redirect them to the login page
-        # If they are accessing /dashboard/123/456, it will bounce to login then come back
         return redirect(url_for('login'))
     
-    # FIX 2: If the user accesses a different user's ID, redirect them to their OWN dashboard
+    # If the user accesses a different user's ID, redirect them to their OWN dashboard
     if session['user_id'] != user_id:
         return redirect(url_for('dashboard', guild_id=guild_id, user_id=session['user_id']))
     
@@ -310,45 +308,42 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# NEW: WEB LEADERBOARD SYSTEM (FIXED GUILD ID)
+# WEB LEADERBOARD (SQLite version)
 # ==========================================
 
 @app.route('/leaderboard/<server_name>')
 def web_leaderboard(server_name):
-    # Load the level data
-    if not os.path.exists(DATA_FILE):
-        return "No level data found.", 404
+    if not os.path.exists(DB_FILE):
+        return "No level data found. (Database not created yet)", 404
         
-    with open(DATA_FILE, 'r') as f:
-        level_data = json.load(f)
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
     
-    # FIX: Use the ACTUAL guild ID found in your logs
-    # Replace this with the ID shown in your Railway logs: 1526703518818373743
+    # Your REAL Guild ID based on your logs
     REAL_GUILD_ID = "1526703518818373743"
     
-    target_guild_id = None
+    # Map the URL to the Guild ID
+    target_guild_id = REAL_GUILD_ID if server_name.lower() == "vodevs" else None
     
-    # Map "VoDevs" to the REAL Guild ID
-    if server_name.lower() == "vodevs":
-        target_guild_id = REAL_GUILD_ID
-    
-    # If we didn't find it, search the data for IDs
+    # If it didn't match, try to grab the first available guild
     if target_guild_id is None:
-        for gid in level_data.keys():
-            target_guild_id = gid
-            break
-    
-    if target_guild_id is None or target_guild_id not in level_data:
-        return f"No data found for server '{server_name}'.", 404
+        c.execute("SELECT DISTINCT guild_id FROM levels")
+        guilds = c.fetchall()
+        if not guilds:
+            conn.close()
+            return "No level data found.", 404
+        target_guild_id = guilds[0][0]
         
-    guild_data = level_data[target_guild_id]
+    # Get all users for this guild
+    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (target_guild_id,))
+    sorted_users = c.fetchall()
+    conn.close()
     
-    # Sort users by XP (descending) and take top 100
-    sorted_users = sorted(guild_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:100]
-    
+    if not sorted_users:
+        return "No level data found for this server.", 404
+        
     formatted_users = []
     
-    # Helper to format XP like 590.3K or 1.2M
     def format_xp(xp):
         if xp >= 1000000:
             return f"{xp/1000000:.1f}M"
@@ -357,22 +352,17 @@ def web_leaderboard(server_name):
         else:
             return str(xp)
             
-    # Helper to calculate level from XP (must match your bot's math!)
     def get_level_from_xp(xp):
         level = 0
         while int(1000 * ((level + 1) ** 1.5)) <= xp:
             level += 1
         return level
     
-    for user_id, data in sorted_users:
-        xp = data["xp"]
+    for user_id, xp in sorted_users:
         level = get_level_from_xp(xp)
         xp_formatted = format_xp(xp)
         
-        # FIX: Properly format the avatar URL
-        # The avatar URL requires the hash of the image, which we don't have here.
-        # We attempt the default format, but this is why you get 404s for avatars.
-        # To fix this properly, you need to save the avatar_hash in level_data.json.
+        # Placeholder for user avatar URL
         avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
         
         formatted_users.append({
@@ -560,6 +550,5 @@ def admin_panel():
     '''
 
 if __name__ == '__main__':
-    # FIX: Correctly use Railway's PORT environment variable
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
