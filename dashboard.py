@@ -4,7 +4,6 @@ import json
 import os
 import io
 import sqlite3
-import shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
@@ -41,7 +40,6 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
-DB_FILE = "level_data.db"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -309,43 +307,31 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (SQLite version + SYNC FIX)
+# WEB LEADERBOARD (Fetches from Bot API)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
-    # 1. Try to find the database
-    db_path = DB_FILE
+    # Instead of reading a file, we fetch the JSON from the Bot API
+    # We use the DASHBOARD_URL variable, but we need to point to the BOT's API.
+    # Since DASHBOARD_URL points to this dashboard, we need to construct the bot's api URL manually.
+    # If your bot and dashboard are on the same Railway project, you can use:
+    bot_api_url = f"https://vodevs-bot-production.up.railway.app/api_leaderboard/{server_id}"
     
-    # If the environment variable is set, use that path instead
-    env_db_path = os.getenv("DB_PATH")
-    if env_db_path and os.path.exists(env_db_path):
-        db_path = env_db_path
+    # NOTE: If you don't have a public URL for your bot, you can use the internal Railway URL.
+    # Replace the URL above with the correct bot URL or use the internal hostname.
     
-    # 2. If it doesn't exist in this folder, try to copy it from a shared location
-    if not os.path.exists(db_path):
-        shared_path = "/app/level_data.db"
-        if os.path.exists(shared_path):
-            try:
-                shutil.copy(shared_path, db_path)
-                print(f"✅ Synced database from {shared_path} to {db_path}")
-            except Exception as e:
-                print(f"⚠️ Failed to sync database: {e}")
+    try:
+        # Ask the bot for the leaderboard data
+        response = requests.get(bot_api_url, timeout=10)
+        if response.status_code != 200:
+            return f"Failed to fetch leaderboard data from bot. Status: {response.status_code}", 500
+        data = response.json()
+    except Exception as e:
+        return f"Error connecting to bot: {e}", 500
     
-    # 3. Final check
-    if not os.path.exists(db_path):
-        return "No level data found. (Database not created yet)", 404
-        
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    
-    # Get all users for this guild
-    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
-    sorted_users = c.fetchall()
-    conn.close()
-    
-    if not sorted_users:
-        return "No level data found for this server.", 404
+    if not data:
+        return "No level data found.", 404
         
     formatted_users = []
     
@@ -354,14 +340,10 @@ def web_leaderboard(server_id):
         elif xp >= 1000: return f"{xp/1000:.1f}K"
         else: return str(xp)
             
-    def get_level_from_xp(xp):
-        level = 0
-        while int(1000 * ((level + 1) ** 1.5)) <= xp:
-            level += 1
-        return level
-    
-    for user_id, xp in sorted_users:
-        level = get_level_from_xp(xp)
+    for user in data:
+        user_id = user["user_id"]
+        level = user["level"]
+        xp = user["xp"]
         xp_formatted = format_xp(xp)
         
         # Placeholder for user avatar URL
@@ -552,15 +534,5 @@ def admin_panel():
     '''
 
 if __name__ == '__main__':
-    # CRITICAL FIX: Try to copy the shared database
-    try:
-        # Attempt to sync from the shared Railway volume
-        shared_path = "/app/level_data.db"
-        if os.path.exists(shared_path):
-            shutil.copy(shared_path, DB_FILE)
-            print(f"✅ Synced shared database from {shared_path} to {DB_FILE}")
-    except Exception as e:
-        print(f"⚠️ Could not sync database: {e}")
-
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
