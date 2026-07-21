@@ -312,14 +312,9 @@ def get_card(guild_id, user_id):
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
-    # Instead of reading a file, we fetch the JSON from the Bot API
-    # We use the DASHBOARD_URL variable, but we need to point to the BOT's API.
-    # Since DASHBOARD_URL points to this dashboard, we need to construct the bot's api URL manually.
-    # If your bot and dashboard are on the same Railway project, you can use:
+    # Fetch from the BOT's API on port 5000
+    # Note: We use the hardcoded bot service URL here
     bot_api_url = f"https://vodevs-bot-production.up.railway.app/api_leaderboard/{server_id}"
-    
-    # NOTE: If you don't have a public URL for your bot, you can use the internal Railway URL.
-    # Replace the URL above with the correct bot URL or use the internal hostname.
     
     try:
         # Ask the bot for the leaderboard data
