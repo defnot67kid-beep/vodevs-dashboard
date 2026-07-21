@@ -4,6 +4,7 @@ import json
 import os
 import io
 import sqlite3
+import shutil
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
@@ -308,15 +309,34 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (SQLite version)
+# WEB LEADERBOARD (SQLite version + SYNC FIX)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
-    if not os.path.exists(DB_FILE):
+    # 1. Try to find the database
+    db_path = DB_FILE
+    
+    # If the environment variable is set, use that path instead
+    env_db_path = os.getenv("DB_PATH")
+    if env_db_path and os.path.exists(env_db_path):
+        db_path = env_db_path
+    
+    # 2. If it doesn't exist in this folder, try to copy it from a shared location
+    if not os.path.exists(db_path):
+        shared_path = "/app/level_data.db"
+        if os.path.exists(shared_path):
+            try:
+                shutil.copy(shared_path, db_path)
+                print(f"✅ Synced database from {shared_path} to {db_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to sync database: {e}")
+    
+    # 3. Final check
+    if not os.path.exists(db_path):
         return "No level data found. (Database not created yet)", 404
         
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     
     # Get all users for this guild
@@ -532,5 +552,15 @@ def admin_panel():
     '''
 
 if __name__ == '__main__':
+    # CRITICAL FIX: Try to copy the shared database
+    try:
+        # Attempt to sync from the shared Railway volume
+        shared_path = "/app/level_data.db"
+        if os.path.exists(shared_path):
+            shutil.copy(shared_path, DB_FILE)
+            print(f"✅ Synced shared database from {shared_path} to {DB_FILE}")
+    except Exception as e:
+        print(f"⚠️ Could not sync database: {e}")
+
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
