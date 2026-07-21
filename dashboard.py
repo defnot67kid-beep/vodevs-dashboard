@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # ==========================================
 # SESSION CONFIG (Fixed for Railway)
-# ========================================== 
+# ==========================================
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
@@ -40,9 +40,6 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
-
-# Load level data globally for the web leaderboard
-DATA_FILE = "level_data.json"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -82,6 +79,7 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
+    # MANUAL URL GENERATION (Eliminates mismatching_state error)
     redirect_uri = f"https://vodevs-dashboard-production.up.railway.app/authorize"
     oauth_url = (
         f"https://discord.com/api/oauth2/authorize"
@@ -98,6 +96,7 @@ def authorize():
     if not code:
         return "❌ No authorization code received.", 400
 
+    # Exchange the code for a token manually
     token_url = "https://discord.com/api/oauth2/token"
     data = {
         "client_id": CLIENT_ID,
@@ -113,17 +112,21 @@ def authorize():
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
         
+        # Fetch user info
         user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_resp.json()
         
+        # Store user ID in session
         session['user_id'] = user_info['id']
         
+        # Redirect to dashboard
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
         return f"❌ Login failed: {e}"
 
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
+    # SECURITY CHECK: Ensure the logged-in user is accessing their own card
     if 'user_id' not in session or session['user_id'] != user_id:
         return "🚫 Unauthorized access. This card belongs to someone else.", 403
     
@@ -196,7 +199,7 @@ def get_card(guild_id, user_id):
     try:
         name = request.args.get('name', f'User')
         level = int(request.args.get('level', 0))
-        rank = int(request.args.get('rank', 0))
+        rank = int(request.args.get('rank', 0))  # <--- FIX: Read rank from URL
         current_xp = int(request.args.get('xp', 0))
         next_level_xp = int(request.args.get('next_xp', 1000))
         progress = float(request.args.get('progress', 0.0))
@@ -262,15 +265,19 @@ def get_card(guild_id, user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
+        # 6. Draw Text (Uses the 'level' and 'rank' variables)
         text_color = "#000000"
         stats_color = "#3d3d3d"
         center_x = box_x + (box_w / 2) - 10
         center_y_name = 75
 
         draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
+        
+        # Level and XP line
         stats_line1 = f"Level: {level}   XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((center_x, center_y_name + 42), stats_line1, fill=stats_color, font=font_medium, anchor="mm")
         
+        # Rank line (underneath)
         if rank > 0:
             stats_line2 = f"Rank: #{rank}"
             draw.text((center_x, center_y_name + 72), stats_line2, fill=stats_color, font=font_medium, anchor="mm")
@@ -294,116 +301,6 @@ def get_card(guild_id, user_id):
     except Exception as e:
         print(f"❌ ERROR: {e}")
         return f"❌ Image generation failed", 500
-
-# ==========================================
-# WEB LEADERBOARD ROUTE
-# ==========================================
-
-@app.route('/leaderboard/<server_name>')
-def web_leaderboard(server_name):
-    # Load the level_data to get top users
-    if not os.path.exists(DATA_FILE):
-        return "No level data found.", 404
-    
-    with open(DATA_FILE, 'r') as f:
-        all_data = json.load(f)
-    
-    # Find the guild id that matches this server name
-    # Note: Since we don't have a mapping of name->id, we just grab the first guild
-    # In production, you'd pass the guild_id instead of the name.
-    guild_id = list(all_data.keys())[0] if all_data else None
-    
-    if not guild_id:
-        return "No data for this server.", 404
-        
-    guild_data = all_data[guild_id]
-    sorted_users = sorted(guild_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:50]
-    
-    leaderboard_html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>VoDevs Leaderboard</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Inter', sans-serif; background: #121212; color: white; margin: 0; padding: 20px; }
-            .container { max-width: 1000px; margin: 0 auto; }
-            h1 { color: #ffffff; margin-bottom: 20px; }
-            
-            .row { display: flex; gap: 20px; }
-            .main-col { flex: 2; }
-            .side-col { flex: 1; }
-            
-            @media (max-width: 768px) { .row { flex-direction: column; } }
-            
-            .leaderboard-card { background: #1e1e2e; border-radius: 12px; padding: 10px; margin-bottom: 10px; display: flex; align-items: center; border: 1px solid #2f3136; transition: 0.2s; }
-            .leaderboard-card:hover { background: #2f3136; }
-            
-            .rank { font-weight: 700; width: 50px; font-size: 18px; color: #b9bbbe; }
-            .rank-1 { color: #ffd700; }
-            .rank-2 { color: #c0c0c0; }
-            .rank-3 { color: #cd7f32; }
-            
-            .avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 15px; background: #2f3136; }
-            .username { font-weight: 600; font-size: 18px; flex: 1; }
-            
-            .stats { display: flex; gap: 20px; color: #b9bbbe; font-size: 14px; }
-            .stats span { margin-left: 10px; }
-            .xp { color: #5865F2; font-weight: 600; }
-            .lvl { color: #45ddc0; font-weight: 600; }
-            
-            .side-card { background: #1e1e2e; border-radius: 12px; padding: 20px; border: 1px solid #2f3136; margin-bottom: 20px; }
-            .side-card h3 { margin-top: 0; color: #b9bbbe; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
-            
-            .btn-customize { display: block; background: #45ddc0; color: #121212; text-align: center; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 700; margin-top: 15px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>VoDevs</h1>
-            
-            <div class="row">
-                <div class="main-col">
-    '''
-    
-    for i, (user_id, data) in enumerate(sorted_users, 1):
-        rank_class = "rank"
-        if i == 1: rank_class += " rank-1"
-        elif i == 2: rank_class += " rank-2"
-        elif i == 3: rank_class += " rank-3"
-        
-        level = int(1000 * (data["xp"] ** (1/1.5))) # Approximate level calculation for display
-        
-        leaderboard_html += f'''
-            <div class="leaderboard-card">
-                <div class="{rank_class}">#{i}</div>
-                <div class="avatar"></div>
-                <div class="username">@{user_id[:10]}</div>
-                <div class="stats">
-                    <span class="lvl">LVL: {level}</span>
-                    <span class="xp">{int(data['xp']):,} XP</span>
-                </div>
-            </div>
-        '''
-    
-    leaderboard_html += '''
-                </div>
-                <div class="side-col">
-                    <div class="side-card">
-                        <h3>Rank Card</h3>
-                        <p style="color:#b9bbbe; font-size:14px;">Customize your rank card</p>
-                        <a href="/dashboard" class="btn-customize">Customize</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-    
-    return leaderboard_html
 
 # ==========================================
 # SECURE ADMIN ROUTES
