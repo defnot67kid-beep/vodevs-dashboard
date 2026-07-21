@@ -7,7 +7,7 @@ import uuid
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
-app = Flask(__name__)
+app = Flask(__name__) 
 
 # ==========================================
 # SESSION CONFIG (Fixed for Railway)
