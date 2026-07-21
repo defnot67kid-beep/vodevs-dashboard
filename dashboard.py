@@ -1,12 +1,12 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask_basicauth import BasicAuth
-import json
+import pymongo
 import os
+import json
 import io
-import sqlite3
-import traceback
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
+import traceback
 
 app = Flask(__name__)
 
@@ -20,11 +20,24 @@ app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_FILE_DIR'] = './flask_session/'
 
 # ==========================================
-# DISCORD OAUTH2 SETUP (Manual URL Build)
+# DISCORD OAUTH2 SETUP
 # ==========================================
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
+
+# ==========================================
+# MONGODB SETUP (USES ENVIRONMENT VARIABLE)
+# ==========================================
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    print("⚠️ CRITICAL WARNING: MONGO_URI environment variable is missing!")
+    print("⚠️ The leaderboard and XP data will not load!")
+else:
+    client = pymongo.MongoClient(MONGO_URI)
+    db = client["vodevs_bot_data"]
+    levels_collection = db["levels"]
+    configs_collection = db["config"]
 
 # ==========================================
 # SECURITY (Admin Login)
@@ -41,8 +54,6 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
-DB_FILE = os.getenv("DB_PATH", "level_data.db")
-
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -82,7 +93,6 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
-    # MANUAL URL GENERATION (Eliminates mismatching_state error)
     redirect_uri = f"https://vodevs-dashboard-production.up.railway.app/authorize"
     oauth_url = (
         f"https://discord.com/api/oauth2/authorize"
@@ -99,7 +109,6 @@ def authorize():
     if not code:
         return "❌ No authorization code received.", 400
 
-    # Exchange the code for a token manually
     token_url = "https://discord.com/api/oauth2/token"
     data = {
         "client_id": CLIENT_ID,
@@ -115,25 +124,20 @@ def authorize():
         token_data = token_resp.json()
         access_token = token_data.get("access_token")
         
-        # Fetch user info
         user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_resp.json()
         
-        # Store user ID in session
         session['user_id'] = user_info['id']
         
-        # Redirect to dashboard
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
         return f"❌ Login failed: {e}"
 
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
-    # SECURITY CHECK: Ensure the logged-in user is accessing their own card
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    # If the user accesses a different user's ID, redirect them to their OWN dashboard
     if session['user_id'] != user_id:
         return redirect(url_for('dashboard', guild_id=guild_id, user_id=session['user_id']))
     
@@ -280,11 +284,9 @@ def get_card(guild_id, user_id):
 
         draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
         
-        # Level and XP line
         stats_line1 = f"Level: {level}   XP: {current_xp:,} / {next_level_xp:,}"
         draw.text((center_x, center_y_name + 42), stats_line1, fill=stats_color, font=font_medium, anchor="mm")
         
-        # Rank line (underneath)
         if rank > 0:
             stats_line2 = f"Rank: #{rank}"
             draw.text((center_x, center_y_name + 72), stats_line2, fill=stats_color, font=font_medium, anchor="mm")
@@ -310,31 +312,17 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (FIXED: Returns friendly error messages)
+# WEB LEADERBOARD (MONGODB VERSION)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
     try:
-        # If the database file doesn't exist
-        if not os.path.exists(DB_FILE):
-            return "The bot hasn't generated a database yet. Wait for members to chat or run `!level`.", 404
-            
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        
-        # Check if this specific server has data
-        c.execute("SELECT COUNT(*) FROM levels WHERE guild_id = ?", (server_id,))
-        count = c.fetchone()[0]
-        
-        if count == 0:
-            conn.close()
-            return f"No members found in database for server {server_id}. Members must chat to appear.", 404
-        
-        # Get all users for this guild
-        c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
-        sorted_users = c.fetchall()
-        conn.close()
+        if not MONGO_URI:
+            return "MongoDB URI not configured. Please set the MONGO_URI environment variable.", 500
+
+        # Fetch from MongoDB
+        results = levels_collection.find({"guild_id": server_id}).sort("xp", pymongo.DESCENDING).limit(100)
         
         formatted_users = []
         
@@ -349,11 +337,14 @@ def web_leaderboard(server_id):
                 level += 1
             return level
         
-        for user_id, xp in sorted_users:
+        has_data = False
+        for doc in results:
+            has_data = True
+            user_id = doc["user_id"]
+            xp = doc["xp"]
+            
             level = get_level_from_xp(xp)
             xp_formatted = format_xp(xp)
-            
-            # Placeholder for user avatar URL
             avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
             
             formatted_users.append({
@@ -363,9 +354,11 @@ def web_leaderboard(server_id):
                 "xp_formatted": xp_formatted
             })
             
+        if not has_data:
+            return "No level data found for this server.", 404
+            
         return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
     except Exception as e:
-        # This will print the exact Python error to your Railway logs!
         print("🔥 LEADERBOARD CRASHED WITH ERROR:")
         traceback.print_exc()
         return f"❌ Internal Server Error: {e}", 500
