@@ -1,5 +1,6 @@
 [phases.setup]
-nixPkgs = ["python311", "fontconfig"]
+nixPkgs = ["python311Full", "fontconfig"]
+nixBuildArgs = ["-e", "stdenvNoCC", "-E", "buildInputs = with pkgs; [ python311Full fontconfig ]; phases = [ installPhase ]; installPhase = '' mkdir -p $out/bin $out/lib $out/share ${''}''"]
 
 [phases.install]
 cmds = ["pip install -r requirements.txt"]
