@@ -40,6 +40,7 @@ ADMIN_CONFIG_FILE = "admin_config.json"
 DEFAULT_BG_FILE = "default_bg.png"
 USER_BG_FOLDER = "backgrounds/"
 FONTS_FOLDER = "fonts/"
+DB_FILE = "level_data.db"
 
 if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
@@ -307,26 +308,24 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (Fetches from Bot API)
+# WEB LEADERBOARD (SQLite version - Server Side Rendered)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
-    # Fetch from the BOT's API on port 5000
-    # Note: We use the hardcoded bot service URL here
-    bot_api_url = f"https://vodevs-bot-production.up.railway.app/api_leaderboard/{server_id}"
+    if not os.path.exists(DB_FILE):
+        return "No level data found. (Database not created yet)", 404
+        
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
     
-    try:
-        # Ask the bot for the leaderboard data
-        response = requests.get(bot_api_url, timeout=10)
-        if response.status_code != 200:
-            return f"Failed to fetch leaderboard data from bot. Status: {response.status_code}", 500
-        data = response.json()
-    except Exception as e:
-        return f"Error connecting to bot: {e}", 500
+    # Get all users for this guild
+    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
+    sorted_users = c.fetchall()
+    conn.close()
     
-    if not data:
-        return "No level data found.", 404
+    if not sorted_users:
+        return "No level data found for this server.", 404
         
     formatted_users = []
     
@@ -335,10 +334,14 @@ def web_leaderboard(server_id):
         elif xp >= 1000: return f"{xp/1000:.1f}K"
         else: return str(xp)
             
-    for user in data:
-        user_id = user["user_id"]
-        level = user["level"]
-        xp = user["xp"]
+    def get_level_from_xp(xp):
+        level = 0
+        while int(1000 * ((level + 1) ** 1.5)) <= xp:
+            level += 1
+        return level
+    
+    for user_id, xp in sorted_users:
+        level = get_level_from_xp(xp)
         xp_formatted = format_xp(xp)
         
         # Placeholder for user avatar URL
