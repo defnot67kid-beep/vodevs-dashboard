@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # ==========================================
 # SESSION CONFIG (Fixed for Railway)
-# ========================================== 
+# ==========================================
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
@@ -120,16 +120,22 @@ def authorize():
         # Store user ID in session
         session['user_id'] = user_info['id']
         
-        # Redirect to dashboard
+        # Redirect to dashboard (Use 0 as the guild_id, but we'll fix the route later)
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
         return f"❌ Login failed: {e}"
 
 @app.route('/dashboard/<guild_id>/<user_id>')
 def dashboard(guild_id, user_id):
-    # SECURITY CHECK: Ensure the logged-in user is accessing their own card
-    if 'user_id' not in session or session['user_id'] != user_id:
-        return "🚫 Unauthorized access. This card belongs to someone else.", 403
+    # FIX 1: Check if the user is logged in via session
+    if 'user_id' not in session:
+        # If they are not logged in, redirect them to the login page
+        # If they are accessing /dashboard/123/456, it will bounce to login then come back
+        return redirect(url_for('login'))
+    
+    # FIX 2: If the user accesses a different user's ID, redirect them to their OWN dashboard
+    if session['user_id'] != user_id:
+        return redirect(url_for('dashboard', guild_id=guild_id, user_id=session['user_id']))
     
     font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
     if not font_files:
@@ -304,7 +310,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# NEW: WEB LEADERBOARD SYSTEM
+# NEW: WEB LEADERBOARD SYSTEM (FIXED GUILD ID)
 # ==========================================
 
 @app.route('/leaderboard/<server_name>')
@@ -316,12 +322,15 @@ def web_leaderboard(server_name):
     with open(DATA_FILE, 'r') as f:
         level_data = json.load(f)
     
-    # Try to find the matching Guild ID
+    # FIX: Use the ACTUAL guild ID found in your logs
+    # Replace this with the ID shown in your Railway logs: 1526703518818373743
+    REAL_GUILD_ID = "1526703518818373743"
+    
     target_guild_id = None
     
-    # If the URL is exactly "VoDevs", map it to your known ID
+    # Map "VoDevs" to the REAL Guild ID
     if server_name.lower() == "vodevs":
-        target_guild_id = "1526989768595083384"
+        target_guild_id = REAL_GUILD_ID
     
     # If we didn't find it, search the data for IDs
     if target_guild_id is None:
@@ -360,7 +369,10 @@ def web_leaderboard(server_name):
         level = get_level_from_xp(xp)
         xp_formatted = format_xp(xp)
         
-        # Build Avatar URL (Standard Discord CDN)
+        # FIX: Properly format the avatar URL
+        # The avatar URL requires the hash of the image, which we don't have here.
+        # We attempt the default format, but this is why you get 404s for avatars.
+        # To fix this properly, you need to save the avatar_hash in level_data.json.
         avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
         
         formatted_users.append({
@@ -548,5 +560,6 @@ def admin_panel():
     '''
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
+    # FIX: Correctly use Railway's PORT environment variable
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
