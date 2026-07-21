@@ -311,31 +311,16 @@ def get_card(guild_id, user_id):
 # WEB LEADERBOARD (SQLite version)
 # ==========================================
 
-@app.route('/leaderboard/<server_name>')
-def web_leaderboard(server_name):
+@app.route('/leaderboard/<server_id>')
+def web_leaderboard(server_id):
     if not os.path.exists(DB_FILE):
         return "No level data found. (Database not created yet)", 404
         
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Your REAL Guild ID based on your logs
-    REAL_GUILD_ID = "1526703518818373743"
-    
-    # Map the URL to the Guild ID
-    target_guild_id = REAL_GUILD_ID if server_name.lower() == "vodevs" else None
-    
-    # If it didn't match, try to grab the first available guild
-    if target_guild_id is None:
-        c.execute("SELECT DISTINCT guild_id FROM levels")
-        guilds = c.fetchall()
-        if not guilds:
-            conn.close()
-            return "No level data found.", 404
-        target_guild_id = guilds[0][0]
-        
     # Get all users for this guild
-    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (target_guild_id,))
+    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
     sorted_users = c.fetchall()
     conn.close()
     
@@ -345,12 +330,9 @@ def web_leaderboard(server_name):
     formatted_users = []
     
     def format_xp(xp):
-        if xp >= 1000000:
-            return f"{xp/1000000:.1f}M"
-        elif xp >= 1000:
-            return f"{xp/1000:.1f}K"
-        else:
-            return str(xp)
+        if xp >= 1000000: return f"{xp/1000000:.1f}M"
+        elif xp >= 1000: return f"{xp/1000:.1f}K"
+        else: return str(xp)
             
     def get_level_from_xp(xp):
         level = 0
@@ -372,7 +354,7 @@ def web_leaderboard(server_name):
             "xp_formatted": xp_formatted
         })
         
-    return render_template('leaderboard.html', server_name=server_name, users=formatted_users)
+    return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
 
 # ==========================================
 # SECURE ADMIN ROUTES
