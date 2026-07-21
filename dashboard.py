@@ -4,6 +4,7 @@ import json
 import os
 import io
 import sqlite3
+import traceback
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 
@@ -308,53 +309,59 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (SQLite version - Server Side Rendered)
+# WEB LEADERBOARD (SQLite version - DEBUGGED)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
-    if not os.path.exists(DB_FILE):
-        return "No level data found. (Database not created yet)", 404
-        
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    
-    # Get all users for this guild
-    c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
-    sorted_users = c.fetchall()
-    conn.close()
-    
-    if not sorted_users:
-        return "No level data found for this server.", 404
-        
-    formatted_users = []
-    
-    def format_xp(xp):
-        if xp >= 1000000: return f"{xp/1000000:.1f}M"
-        elif xp >= 1000: return f"{xp/1000:.1f}K"
-        else: return str(xp)
+    try:
+        if not os.path.exists(DB_FILE):
+            return "No level data found. (Database not created yet)", 404
             
-    def get_level_from_xp(xp):
-        level = 0
-        while int(1000 * ((level + 1) ** 1.5)) <= xp:
-            level += 1
-        return level
-    
-    for user_id, xp in sorted_users:
-        level = get_level_from_xp(xp)
-        xp_formatted = format_xp(xp)
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
         
-        # Placeholder for user avatar URL
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
+        # Get all users for this guild
+        c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
+        sorted_users = c.fetchall()
+        conn.close()
         
-        formatted_users.append({
-            "username": f"User {user_id[:4]}",
-            "avatar_url": avatar_url,
-            "level": level,
-            "xp_formatted": xp_formatted
-        })
+        if not sorted_users:
+            return "No level data found for this server.", 404
+            
+        formatted_users = []
         
-    return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
+        def format_xp(xp):
+            if xp >= 1000000: return f"{xp/1000000:.1f}M"
+            elif xp >= 1000: return f"{xp/1000:.1f}K"
+            else: return str(xp)
+                
+        def get_level_from_xp(xp):
+            level = 0
+            while int(1000 * ((level + 1) ** 1.5)) <= xp:
+                level += 1
+            return level
+        
+        for user_id, xp in sorted_users:
+            level = get_level_from_xp(xp)
+            xp_formatted = format_xp(xp)
+            
+            # Placeholder for user avatar URL
+            avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
+            
+            formatted_users.append({
+                "username": f"User {user_id[:4]}",
+                "avatar_url": avatar_url,
+                "level": level,
+                "xp_formatted": xp_formatted
+            })
+            
+        return render_template('leaderboard.html', server_name="VoDevs", users=formatted_users)
+    except Exception as e:
+        # This will print the exact Python error to your Railway logs!
+        print("🔥 LEADERBOARD CRASHED WITH ERROR:")
+        traceback.print_exc()
+        return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
 # SECURE ADMIN ROUTES
