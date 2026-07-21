@@ -309,26 +309,32 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (SQLite version - DEBUGGED)
+# WEB LEADERBOARD (FIXED: Returns friendly error messages)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
 def web_leaderboard(server_id):
     try:
+        # If the database file doesn't exist
         if not os.path.exists(DB_FILE):
-            return "No level data found. (Database not created yet)", 404
+            return "The bot hasn't generated a database yet. Wait for members to chat or run `!level`.", 404
             
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
+        
+        # Check if this specific server has data
+        c.execute("SELECT COUNT(*) FROM levels WHERE guild_id = ?", (server_id,))
+        count = c.fetchone()[0]
+        
+        if count == 0:
+            conn.close()
+            return f"No members found in database for server {server_id}. Members must chat to appear.", 404
         
         # Get all users for this guild
         c.execute("SELECT user_id, xp FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT 100", (server_id,))
         sorted_users = c.fetchall()
         conn.close()
         
-        if not sorted_users:
-            return "No level data found for this server.", 404
-            
         formatted_users = []
         
         def format_xp(xp):
@@ -356,7 +362,7 @@ def web_leaderboard(server_id):
                 "xp_formatted": xp_formatted
             })
             
-        return render_template('leaderboard.html', server_name="VoDevs", users=formatted_users)
+        return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
     except Exception as e:
         # This will print the exact Python error to your Railway logs!
         print("🔥 LEADERBOARD CRASHED WITH ERROR:")
