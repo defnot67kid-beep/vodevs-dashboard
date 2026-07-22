@@ -373,9 +373,13 @@ def web_leaderboard(server_id):
 # ==========================================
 # API PROXY (FORWARDS REQUEST TO BOT)
 # ==========================================
+# ==========================================
+# API PROXY (FORWARDS REQUEST TO BOT)
+# ==========================================
 @app.route('/api/proxy/create_reaction_role', methods=['POST'])
 def proxy_create_reaction_role():
     try:
+        # IMPORTANT: Add https:// prefix here
         bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
         if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
         response = requests.post(f"{bot_api_url}/api/create_reaction_role", json=request.get_json(), headers={"Content-Type": "application/json"})
@@ -402,7 +406,6 @@ def proxy_get_members():
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 # ==========================================
 # SECURE ADMIN ROUTES (SESSION BASED - ADVANCED UI)
 # ==========================================
