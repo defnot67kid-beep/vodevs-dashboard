@@ -101,6 +101,7 @@ def login():
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=identify"
+        f"&state={token}"
     )
     return redirect(oauth_url)
 
