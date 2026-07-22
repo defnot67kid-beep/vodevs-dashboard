@@ -38,6 +38,7 @@ else:
     db = client["vodevs_bot_data"]
     levels_collection = db["levels"]
     invites_collection = db["admin_invites"]
+    admins_collection = db["admins"]     # <--- ADDED THIS
     configs_collection = db["config"]
 
 # ==========================================
@@ -101,7 +102,7 @@ def login():
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=identify"
-        f"&state={token}"
+        # REMOVED &state={token} HERE - It is not needed for standard login
     )
     return redirect(oauth_url)
 
@@ -351,9 +352,6 @@ def web_leaderboard(server_id):
             
             avatar_hash = doc.get("avatar_hash")
             if avatar_hash:
-                # =========================================================
-                # THE FIX: SUPPORT ANIMATED GIFs
-                # =========================================================
                 ext = "gif" if avatar_hash.startswith("a_") else "png"
                 avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
             else:
@@ -565,7 +563,7 @@ def admin_panel():
     '''
 
 # ==========================================
-# SECURE ADMIN SIGNUP ROUTES (NEW)
+# SECURE ADMIN SIGNUP ROUTES
 # ==========================================
 
 @app.route('/admin/signup/<token>')
@@ -584,6 +582,7 @@ def admin_signup(token):
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=identify"
+        f"&state={token}"  # <--- FIX: Added the state param so Discord returns it
     )
     return redirect(oauth_url)
 
@@ -608,7 +607,7 @@ def admin_authorize():
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": url_for('admin_authorize', _external=True)
+        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/admin/authorize" # Hardcoded HTTPS for safety
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
