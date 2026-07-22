@@ -750,7 +750,7 @@ def admin_register(discord_id):
     return redirect(url_for('admin_panel'))
 
 # ==========================================
-# BOT OWNER PANEL (SUPER SECURE)
+# BOT OWNER PANEL (SUPER SECURE - REAL DATA)
 # ==========================================
 @app.route('/owner/<owner_token>')
 def owner_panel(owner_token):
@@ -758,8 +758,10 @@ def owner_panel(owner_token):
     if not secret or secret["token"] != owner_token:
         return "❌ Unauthorized access. Invalid or expired Owner Token.", 403
 
+    # 1. FETCH REAL ADMIN DATA
     admins = list(admins_collection.find({}, {"_id": 0, "username": 1, "discord_id": 1}))
     
+    # 2. FETCH REAL USER XP DATA
     top_users_raw = list(levels_collection.find().sort("xp", pymongo.DESCENDING).limit(10))
     top_users = []
     for u in top_users_raw:
@@ -778,17 +780,27 @@ def owner_panel(owner_token):
             "avatar_url": avatar_url
         })
 
-    # IMPORTANT NOTE: Because your bot does not save roles/channels to MongoDB, 
-    # we use placeholder data here so the UI functions. 
-    # To get real data, your bot must cache guild.roles and guild.channels to MongoDB.
-    roles = [{"name": "Admin", "color": "#ff5555"}, {"name": "Moderator", "color": "#5865F2"}, {"name": "Member", "color": "#45ddc0"}]
-    categories = [{"name": "General", "channels": [{"name": "general-chat", "type": "Text"}]}]
-    
+    # 3. FETCH REAL SERVER ROLES & CHANNELS
+    guild_id = secret.get("guild_id")
+    roles = []
+    categories = []
+    total_channels = 0
+
+    if guild_id:
+        server_meta = db["server_meta"].find_one({"guild_id": guild_id})
+        if server_meta:
+            roles = server_meta.get("roles", [])
+            categories = server_meta.get("categories", [])
+            
+            # Count total channels
+            for cat in categories:
+                total_channels += len(cat.get("channels", []))
+
     stats = {
         "admins": len(admins),
         "users": levels_collection.count_documents({}),
         "roles": len(roles),
-        "channels": 5
+        "channels": total_channels
     }
 
     return render_template('ownerdashboard.html', stats=stats, admins=admins, top_users=top_users, roles=roles, categories=categories)
