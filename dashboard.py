@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, flash
 from flask_basicauth import BasicAuth
+from werkzeug.security import generate_password_hash, check_password_hash
 import pymongo
 import os
 import json
@@ -13,9 +14,9 @@ from datetime import datetime
 app = Flask(__name__)
 
 # ==========================================
-# SESSION CONFIG
+# SESSION CONFIG (SECURE)
 # ==========================================
-app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", os.urandom(24).hex())
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
@@ -43,7 +44,7 @@ else:
     configs_collection = db["config"]
     owner_secrets_collection = db["owner_secrets"]
     user_cache_collection = db["user_cache"]
-    admin_actions_collection = db["admin_actions"] # <-- NEW QUEUE
+    admin_actions_collection = db["admin_actions"]
 
 # ==========================================
 # CONFIGURATION
@@ -92,7 +93,7 @@ def dashboard_redirect():
 
 @app.route('/login')
 def login():
-    redirect_uri = f"https://vodevs-dashboard-production.up.railway.app/authorize"
+    redirect_uri = f"{DASHBOARD_URL}/authorize"
     oauth_url = (
         f"https://discord.com/api/oauth2/authorize"
         f"?client_id={CLIENT_ID}"
@@ -114,7 +115,7 @@ def authorize():
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/authorize"
+        "redirect_uri": f"{DASHBOARD_URL}/authorize"
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     
@@ -352,346 +353,4 @@ def web_leaderboard(server_id):
                 avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
             else:
                 default_avatar_id = (int(user_id) >> 22) % 6
-                avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
-            
-            formatted_users.append({
-                "username": username,
-                "avatar_url": avatar_url,
-                "level": level,
-                "xp_formatted": xp_formatted,
-                "messages": "0",
-                "voice_time": "-",
-                "is_animated": avatar_hash.startswith("a_") if avatar_hash else False
-            })
-            
-        if not has_data:
-            return "No level data found for this server.", 404
-            
-        return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
-    except Exception as e:
-        print("🔥 LEADERBOARD CRASHED WITH ERROR:")
-        traceback.print_exc()
-        return f"❌ Internal Server Error: {e}", 500
-
-# ==========================================
-# SECURE ADMIN ROUTES (SESSION BASED - MONGODB)
-# ==========================================
-
-@app.route('/admin', methods=['GET'])
-def admin_panel():
-    if 'admin_id' not in session:
-        return redirect(url_for('admin_login_form'))
-
-    admin = admins_collection.find_one({"_id": ObjectId(session['admin_id'])})
-    if not admin:
-        return redirect(url_for('admin_logout'))
-
-    # ============================================================
-    # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
-    # ============================================================
-    guild_id = "1526703518818373743" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
-
-    # FETCH REAL DATA FROM MONGODB CACHE
-    cached_data = user_cache_collection.find_one({"guild_id": guild_id})
-    members = cached_data["members"] if cached_data and "members" in cached_data else []
-
-    return render_template('admindashboard.html', 
-                           admin_username=admin['username'],
-                           total_members=len(members),
-                           members=members,
-                           guild_id=guild_id) # <--- PASSED guild_id HERE
-
-# ==========================================
-# QUEUE ACTIONS TO MONGODB (THE PURE DB WAY)
-# ==========================================
-
-@app.route('/api/admin/create_poll', methods=['POST'])
-def api_create_poll():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    data = request.get_json()
-    data['type'] = 'poll'
-    data['guild_id'] = data.get('guild_id')
-    data['status'] = 'pending'
-    data['created_at'] = datetime.utcnow()
-
-    try:
-        admin_actions_collection.insert_one(data)
-        return jsonify({"status": "success", "message": "Poll queued for bot!"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/admin/mod_action', methods=['POST'])
-def api_mod_action():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    data = request.get_json()
-    data['type'] = 'mod_action'
-    data['status'] = 'pending'
-    data['created_at'] = datetime.utcnow()
-
-    try:
-        admin_actions_collection.insert_one(data)
-        return jsonify({"status": "success", "message": "Mod action queued for bot!"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/admin/send_announcement', methods=['POST'])
-def api_send_announcement():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-
-    data = request.get_json()
-    data['type'] = 'announcement'
-    data['status'] = 'pending'
-    data['created_at'] = datetime.utcnow()
-
-    try:
-        admin_actions_collection.insert_one(data)
-        return jsonify({"status": "success", "message": "Announcement queued for bot!"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-# ==========================================
-# ADMIN LOGIN & LOGOUT
-# ==========================================
-
-@app.route('/admin/login')
-def admin_login_form():
-    if 'admin_id' in session:
-        return redirect(url_for('admin_panel'))
-        
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin Login</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 350px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-            h1 { color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }
-            p { color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }
-            form { display: flex; flex-direction: column; gap: 15px; }
-            input { padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; transition: 0.2s; }
-            input:focus { border-color: #5865F2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.2); }
-            button { background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
-            button:hover { background: #4752c4; transform: scale(1.02); }
-            .error { color: #ff5555; font-size: 14px; margin-top: 10px; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>🛡️ Admin Login</h1>
-            <p>Enter your admin credentials.</p>
-            <form method="POST" action="/admin/login">
-                <input type="text" name="username" placeholder="Admin Username" required>
-                <input type="password" name="password" placeholder="Admin Password" required>
-                <button type="submit">Login</button>
-            </form>
-        </div>
-    </body>
-    </html>
-    '''
-
-@app.route('/admin/login', methods=['POST'])
-def admin_login_process():
-    username = request.form.get('username')
-    password = request.form.get('password')
-
-    if not username or not password:
-        return "❌ Username and password required.", 400
-
-    admin = admins_collection.find_one({"username": username, "password": password})
-    if not admin:
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head><title>Error</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <style>body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
-        .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 350px; width: 100%; }
-        h1 { color: #ff5555; } a { color: #5865F2; text-decoration: none; }
-        </style></head>
-        <body><div class="card"><h1>❌ Invalid Credentials</h1><p>Username or password is incorrect.</p><a href="/admin/login">Try again</a></div></body></html>
-        ''', 401
-
-    session['admin_id'] = str(admin['_id'])
-    session['admin_username'] = admin['username']
-    
-    return redirect(url_for('admin_panel'))
-
-@app.route('/admin/logout')
-def admin_logout():
-    session.pop('admin_id', None)
-    session.pop('admin_username', None)
-    return redirect(url_for('admin_login_form'))
-
-# ==========================================
-# SECURE ADMIN SIGNUP ROUTES
-# ==========================================
-
-@app.route('/admin/signup/<token>')
-def admin_signup(token):
-    invite = invites_collection.find_one({"token": token, "used": False})
-    if not invite:
-        return "❌ Invalid or already used invite link.", 404
-
-    redirect_uri = url_for('admin_authorize', _external=True, _scheme='https')
-    oauth_url = (
-        f"https://discord.com/api/oauth2/authorize"
-        f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={redirect_uri}"
-        f"&response_type=code"
-        f"&scope=identify"
-        f"&state={token}" 
-    )
-    return redirect(oauth_url)
-
-@app.route('/admin/authorize')
-def admin_authorize():
-    code = request.args.get('code')
-    token = request.args.get('state')
-    
-    if not code or not token:
-        return "❌ Missing authorization code or state.", 400
-
-    invite = invites_collection.find_one({"token": token, "used": False})
-    if not invite:
-        return "❌ Invalid or expired invite token.", 404
-
-    token_url = "https://discord.com/api/oauth2/token"
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/admin/authorize"
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-    try:
-        resp = requests.post(token_url, data=data, headers=headers)
-        token_data = resp.json()
-        access_token = token_data.get("access_token")
-
-        user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
-        user_info = user_resp.json()
-        discord_id = str(user_info["id"])
-
-        if discord_id != invite["discord_id"]:
-            return "❌ This Discord account does not match the invite recipient.", 403
-
-        invites_collection.update_one({"token": token}, {"$set": {"used": True}})
-
-        return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Create Admin Account</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-            <style>
-                body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-                .card {{ background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }}
-                h1 {{ color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }}
-                p {{ color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }}
-                form {{ display: flex; flex-direction: column; gap: 15px; }}
-                input {{ padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; transition: 0.2s; }}
-                input:focus {{ border-color: #5865F2; }}
-                button {{ background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }}
-                button:hover {{ background: #4752c4; transform: scale(1.02); }}
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h1>🛡️ Create Admin Account</h1>
-                <p>Welcome {user_info['username']}! Set up your admin credentials.</p>
-                <form method="POST" action="/admin/register/{discord_id}">
-                    <input type="text" name="username" placeholder="Admin Username" required>
-                    <input type="password" name="password" placeholder="Admin Password" required>
-                    <button type="submit">Create Account</button>
-                </form>
-            </div>
-        </body>
-        </html>
-        """
-    except Exception as e:
-        return f"❌ Authentication failed: {e}", 500
-
-@app.route('/admin/register/<discord_id>', methods=['POST'])
-def admin_register(discord_id):
-    username = request.form.get('username')
-    password = request.form.get('password')
-
-    if not username or not password:
-        return "❌ Username and password required.", 400
-
-    existing = admins_collection.find_one({"discord_id": discord_id})
-    if existing:
-        return "❌ This Discord account already has an admin account created.", 400
-
-    result = admins_collection.insert_one({
-        "discord_id": discord_id,
-        "username": username,
-        "password": password
-    })
-
-    session['admin_id'] = str(result.inserted_id)
-    session['admin_username'] = username
-
-    return redirect(url_for('admin_panel'))
-
-# ==========================================
-# BOT OWNER PANEL (SUPER SECURE - REAL DATA)
-# ==========================================
-@app.route('/owner/<owner_token>')
-def owner_panel(owner_token):
-    secret = owner_secrets_collection.find_one({"owner_id": "1516568962966753291"})
-    if not secret or secret["token"] != owner_token:
-        return "❌ Unauthorized access. Invalid or expired Owner Token.", 403
-
-    admins = list(admins_collection.find({}, {"_id": 0, "username": 1, "discord_id": 1}))
-    top_users_raw = list(levels_collection.find().sort("xp", pymongo.DESCENDING).limit(10))
-    top_users = []
-    for u in top_users_raw:
-        xp = u["xp"]
-        xp_str = f"{xp/1000:.1f}K" if xp >= 1000 else str(xp)
-        avatar_hash = u.get("avatar_hash")
-        if avatar_hash:
-            ext = "gif" if avatar_hash.startswith("a_") else "png"
-            avatar_url = f"https://cdn.discordapp.com/avatars/{u['user_id']}/{avatar_hash}.{ext}?size=128"
-        else:
-            avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
-        top_users.append({
-            "username": u.get("username", "Unknown"),
-            "level": (int((int(xp/1000)**(2/3)))),
-            "xp_formatted": xp_str,
-            "avatar_url": avatar_url
-        })
-
-    guild_id = secret.get("guild_id")
-    roles = []
-    categories = []
-    total_channels = 0
-
-    if guild_id:
-        server_meta = db["server_meta"].find_one({"guild_id": guild_id})
-        if server_meta:
-            roles = server_meta.get("roles", [])
-            categories = server_meta.get("categories", [])
-            for cat in categories:
-                total_channels += len(cat.get("channels", []))
-
-    stats = {
-        "admins": len(admins),
-        "users": levels_collection.count_documents({}),
-        "roles": len(roles),
-        "channels": total_channels
-    }
-
-    return render_template('ownerdashboard.html', stats=stats, admins=admins, top_users=top_users, roles=roles, categories=categories)
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+                avatar_url = f"https://cdn.discordapp
