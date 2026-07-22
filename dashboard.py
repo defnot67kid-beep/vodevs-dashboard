@@ -377,18 +377,28 @@ def web_leaderboard(server_id):
 def proxy_create_reaction_role():
     try:
         bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
-        if not bot_api_url:
-            return jsonify({"status": "error", "message": "BOT_API_URL environment variable not set"}), 500
+        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
+        response = requests.post(f"{bot_api_url}/api/create_reaction_role", json=request.get_json(), headers={"Content-Type": "application/json"})
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-        # Forward the request to the bot
-        target_url = f"{bot_api_url}/api/create_reaction_role"
-        
-        response = requests.post(
-            target_url,
-            json=request.get_json(),
-            headers={"Content-Type": "application/json"}
-        )
-        
+@app.route('/api/proxy/mod_action', methods=['POST'])
+def proxy_mod_action():
+    try:
+        bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
+        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
+        response = requests.post(f"{bot_api_url}/api/mod_action", json=request.get_json(), headers={"Content-Type": "application/json"})
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/proxy/get_members', methods=['POST'])
+def proxy_get_members():
+    try:
+        bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
+        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
+        response = requests.post(f"{bot_api_url}/api/get_members", json=request.get_json(), headers={"Content-Type": "application/json"})
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -407,89 +417,32 @@ def admin_panel():
     if not admin:
         return redirect(url_for('admin_logout'))
 
-    # 2. FETCH REAL DATA FROM MONGODB
-    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE WITH YOUR ACTUAL DISCORD GUILD ID
-    raw_users = list(levels_collection.find({"guild_id": guild_id}).limit(100))
-    
-    members = []
-    for u in raw_users:
-        xp = u["xp"]
-        level = int((int(xp/1000)**(2/3)))
-        members.append({
-            "id": u["user_id"],
-            "name": u.get("username", "Unknown"),
-            "xp": xp,
-            "level": level,
-            "avatar_hash": u.get("avatar_hash", "0")
-        })
+    # ============================================================
+    # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
+    # ============================================================
+    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
 
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
-                           total_members=len(members),
-                           members=members,
                            guild_id=guild_id) # Pass guild_id to template
 
 @app.route('/admin/mod_action', methods=['POST'])
 def admin_mod_action():
     if 'admin_id' not in session:
         return redirect(url_for('admin_login_form'))
-
-    user_id = request.form.get('user_id')
-    action = request.form.get('action')
-    reason = request.form.get('reason')
-    duration = request.form.get('duration', 60)
-
-    return f"""
-    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
-        <h1 style="color: #45ddc0;">✅ Action Sent to Bot!</h1>
-        <p style="color: #b9bbbe;">The bot is executing this action.</p>
-        <p><b>Action:</b> {action.upper()} on User ID {user_id}</p>
-        <p><b>Reason:</b> {reason}</p>
-        {"<p><b>Duration:</b> " + duration + "s</p>" if action in ['timeout', 'mute'] else ""}
-        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
-    </div>
-    """
+    return redirect(url_for('admin_panel'))
 
 @app.route('/admin/create_poll', methods=['POST'])
 def admin_create_poll():
     if 'admin_id' not in session:
         return redirect(url_for('admin_login_form'))
-
-    question = request.form.get('question')
-    options = request.form.getlist('options[]')
-
-    if not question or len(options) < 2:
-        return "❌ Invalid Poll Data.", 400
-
-    return f"""
-    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
-        <h1 style="color: #45ddc0;">📊 Poll Created!</h1>
-        <p style="color: #b9bbbe;">Bot will post this poll to the configured channel.</p>
-        <p><b>Question:</b> {question}</p>
-        <p><b>Options:</b> {', '.join(options)}</p>
-        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
-    </div>
-    """
+    return redirect(url_for('admin_panel'))
 
 @app.route('/admin/send_announcement', methods=['POST'])
 def admin_send_announcement():
     if 'admin_id' not in session:
         return redirect(url_for('admin_login_form'))
-
-    channel_id = request.form.get('channel_id', '1526730287378075648')
-    content = request.form.get('content')
-
-    if not content:
-        return "❌ Announcement content cannot be empty.", 400
-
-    return f"""
-    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
-        <h1 style="color: #45ddc0;">📢 Announcement Sent!</h1>
-        <p style="color: #b9bbbe;">Bot will post this announcement to channel <code>{channel_id}</code>.</p>
-        <p><b>Content:</b> {content}</p>
-        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
-    </div>
-    """
+    return redirect(url_for('admin_panel'))
 
 # ==========================================
 # ADMIN LOGIN & LOGOUT
@@ -691,10 +644,7 @@ def owner_panel(owner_token):
     if not secret or secret["token"] != owner_token:
         return "❌ Unauthorized access. Invalid or expired Owner Token.", 403
 
-    # 1. FETCH REAL ADMIN DATA
     admins = list(admins_collection.find({}, {"_id": 0, "username": 1, "discord_id": 1}))
-    
-    # 2. FETCH REAL USER XP DATA
     top_users_raw = list(levels_collection.find().sort("xp", pymongo.DESCENDING).limit(10))
     top_users = []
     for u in top_users_raw:
@@ -713,7 +663,6 @@ def owner_panel(owner_token):
             "avatar_url": avatar_url
         })
 
-    # 3. FETCH REAL SERVER ROLES & CHANNELS
     guild_id = secret.get("guild_id")
     roles = []
     categories = []
@@ -724,8 +673,6 @@ def owner_panel(owner_token):
         if server_meta:
             roles = server_meta.get("roles", [])
             categories = server_meta.get("categories", [])
-            
-            # Count total channels
             for cat in categories:
                 total_channels += len(cat.get("channels", []))
 
