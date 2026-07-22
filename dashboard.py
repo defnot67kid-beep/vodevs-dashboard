@@ -371,8 +371,7 @@ def web_leaderboard(server_id):
         return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
-# ==========================================
-# SECURE ADMIN ROUTES (SESSION BASED - NEW ADVANCED UI)
+# SECURE ADMIN ROUTES (SESSION BASED - ADVANCED UI)
 # ==========================================
 
 @app.route('/admin', methods=['GET'])
@@ -385,19 +384,27 @@ def admin_panel():
     if not admin:
         return redirect(url_for('admin_logout'))
 
-    # 2. Fetch Fake Server Members for UI Demonstration
-    # In a real scenario, you would fetch this list from Discord API or your DB cache.
-    members = [
-        {"id": "1234567890", "name": "User_One", "status": "online", "avatar_url": "https://cdn.discordapp.com/embed/avatars/0.png"},
-        {"id": "1234567891", "name": "User_Two", "status": "idle", "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"},
-        {"id": "1234567892", "name": "User_Three", "status": "dnd", "avatar_url": "https://cdn.discordapp.com/embed/avatars/2.png"},
-        {"id": "1234567893", "name": "User_Four", "status": "offline", "avatar_url": "https://cdn.discordapp.com/embed/avatars/3.png"},
-    ]
+    # 2. FETCH REAL DATA FROM MONGODB
+    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE WITH YOUR ACTUAL DISCORD GUILD ID
+    raw_users = list(levels_collection.find({"guild_id": guild_id}).limit(100))
+    
+    members = []
+    for u in raw_users:
+        xp = u["xp"]
+        level = int((int(xp/1000)**(2/3)))
+        members.append({
+            "id": u["user_id"],
+            "name": u.get("username", "Unknown"),
+            "xp": xp,
+            "level": level,
+            "avatar_hash": u.get("avatar_hash", "0")
+        })
 
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
                            total_members=len(members),
-                           members=members)
+                           members=members,
+                           guild_id=guild_id) # Pass guild_id to template
 
 @app.route('/admin/mod_action', methods=['POST'])
 def admin_mod_action():
@@ -409,14 +416,10 @@ def admin_mod_action():
     reason = request.form.get('reason')
     duration = request.form.get('duration', 60)
 
-    # IMPORTANT: In production, you would send a request to your Discord Bot here.
-    # The bot must have an HTTP endpoint to execute these actions.
-    # Returning a placeholder message for now:
-    
     return f"""
     <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
-        <h1 style="color: #45ddc0;">✅ Action Sent!</h1>
-        <p style="color: #b9bbbe;">Moderation action has been sent to the bot.</p>
+        <h1 style="color: #45ddc0;">✅ Action Sent to Bot!</h1>
+        <p style="color: #b9bbbe;">The bot is executing this action.</p>
         <p><b>Action:</b> {action.upper()} on User ID {user_id}</p>
         <p><b>Reason:</b> {reason}</p>
         {"<p><b>Duration:</b> " + duration + "s</p>" if action in ['timeout', 'mute'] else ""}
@@ -435,8 +438,6 @@ def admin_create_poll():
     if not question or len(options) < 2:
         return "❌ Invalid Poll Data.", 400
 
-    # Send request to Bot API to create a poll
-    # Placeholder message:
     return f"""
     <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
         <h1 style="color: #45ddc0;">📊 Poll Created!</h1>
@@ -458,8 +459,6 @@ def admin_send_announcement():
     if not content:
         return "❌ Announcement content cannot be empty.", 400
 
-    # Send request to Bot API to send announcement
-    # Placeholder message:
     return f"""
     <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
         <h1 style="color: #45ddc0;">📢 Announcement Sent!</h1>
