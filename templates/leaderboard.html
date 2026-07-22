@@ -3,131 +3,312 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaderboard for {{ server_name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Leaderboard - {{ server_name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; }
+        /* === BASE RESET & DARK THEME === */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: #1e1e2e; 
-            color: #ffffff;
-            margin: 0;
-            padding: 40px 20px;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #16161a;
+            color: #e4e4e7;
             display: flex;
             justify-content: center;
+            padding: 40px 20px;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1000px;
+            display: flex;
+            gap: 30px;
+            max-width: 1300px;
             width: 100%;
         }
 
-        .header {
+        /* === LEFT SIDE: LEADERBOARD === */
+        .leaderboard-wrapper { flex: 1; min-width: 0; }
+
+        .server-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
-        .header h1 { font-size: 28px; margin: 0; }
-        .header .btn-back {
-            background: #5865F2;
-            color: white;
+        .server-header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+        }
+        .server-header .btn-back {
+            background: #1e1e24;
+            color: #e4e4e7;
             text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
             font-size: 14px;
+            transition: 0.2s;
+            border: 1px solid #27272a;
+        }
+        .server-header .btn-back:hover { background: #27272a; }
+
+        .top-row {
+            display: flex;
+            gap: 30px;
         }
 
-        .table-wrapper {
-            background: #2f3136;
+        .leaderboard-table {
+            flex: 1;
+            background: #1e1e24;
             border-radius: 12px;
-            padding: 20px;
-            border: 1px solid #40444b;
+            border: 1px solid #27272a;
+            overflow: hidden;
         }
 
+        /* === TABLE STYLING === */
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 15px;
         }
 
+        thead {
+            background: #1e1e24;
+            border-bottom: 1px solid #27272a;
+        }
         th {
             text-align: left;
-            padding: 12px 15px;
-            color: #b9bbbe;
-            font-weight: 600;
-            border-bottom: 2px solid #40444b;
+            padding: 16px 20px;
+            color: #a1a1aa;
+            font-weight: 500;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
+        tbody tr {
+            border-bottom: 1px solid #27272a;
+            transition: 0.2s;
+        }
+        tbody tr:hover { background: #27272a; }
+        tbody tr:last-child { border-bottom: none; }
+
         td {
-            padding: 15px;
-            border-bottom: 1px solid #40444b;
+            padding: 16px 20px;
             vertical-align: middle;
         }
 
-        tr:last-child td { border-bottom: none; }
+        /* Rank Column */
+        .rank-col { width: 50px; font-weight: 600; color: #a1a1aa; text-align: center; }
+        .rank-1 { color: #fbbf24; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
 
-        .rank-col { width: 50px; font-weight: 700; color: #b9bbbe; text-align: center; }
-        .rank-1 { color: #ffd700; } /* Gold */
-        .rank-2 { color: #c0c0c0; } /* Silver */
-        .rank-3 { color: #cd7f32; } /* Bronze */
-
-        .user-col { display: flex; align-items: center; gap: 12px; }
+        /* User Column */
+        .user-cell { display: flex; align-items: center; gap: 14px; }
         .avatar {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
-            background: #40444b;
+            background: #27272a;
             object-fit: cover;
+            flex-shrink: 0;
         }
-        .username { font-weight: 600; color: #ffffff; }
+        .username {
+            font-weight: 600;
+            color: #e4e4e7;
+            white-space: nowrap;
+        }
+        .username .badge {
+            background: #27272a;
+            color: #a1a1aa;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
 
-        .xp-col { font-weight: 600; color: #b9bbbe; }
-        .level-col { font-weight: 600; color: #b9bbbe; }
+        /* Stats Columns */
+        .stat-col {
+            font-weight: 500;
+            color: #e4e4e7;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-col.sub { color: #a1a1aa; font-weight: 400; }
 
-        @media (max-width: 600px) {
-            .header { flex-direction: column; align-items: flex-start; gap: 15px; }
-            .level-col, th:nth-child(3) { display: none; } /* Hide Level on mobile */
+        /* === RIGHT SIDE: INFO PANEL === */
+        .info-panel {
+            width: 320px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-box {
+            background: #1e1e24;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .panel-box h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 5px 0;
+        }
+        .panel-box p.sub {
+            font-size: 13px;
+            color: #a1a1aa;
+            margin: 0 0 15px 0;
+        }
+
+        .btn-customize {
+            display: inline-block;
+            background: #2dd4bf;
+            color: #0f172a;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .btn-customize:hover { background: #22d3ee; transform: scale(1.02); }
+
+        /* Role Rewards List */
+        .roles-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .role-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .role-label { font-size: 13px; color: #a1a1aa; }
+        
+        .role-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            width: fit-content;
+        }
+        .role-badge.locked {
+            background: #27272a;
+            color: #a1a1aa;
+            border: 1px solid #3f3f46;
+        }
+        .role-badge.unlocked {
+            background: #2dd4bf;
+            color: #0f172a;
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 900px) {
+            .container { flex-direction: column; }
+            .info-panel { width: 100%; }
+            .top-row { flex-direction: column; }
+        }
+        @media (max-width: 700px) {
+            th, td { padding: 12px 10px; }
+            .stat-col.sub, th:nth-child(5) { display: none; } /* Hide less important stats */
+            .username { font-size: 14px; }
+            .avatar { width: 32px; height: 32px; }
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>{{ server_name }}</h1>
-        <a href="javascript:history.back()" class="btn-back">← Go Back</a>
-    </div>
+    <div class="container">
+        
+        <!-- === LEFT SIDE: MAIN LEADERBOARD === -->
+        <div class="leaderboard-wrapper">
+            <div class="server-header">
+                <h1>{{ server_name }}</h1>
+                <a href="javascript:history.back()" class="btn-back">← Back</a>
+            </div>
 
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>User</th>
-                    <th>Level</th>
-                    <th>XP</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in users %}
-                <tr>
-                    <td class="rank-col {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
-                        #{{ loop.index }}
-                    </td>
-                    <td>
-                        <div class="user-col">
-                            <img src="{{ user.avatar_url }}" class="avatar" alt="avatar">
-                            <span class="username">{{ user.username }}</span>
-                        </div>
-                    </td>
-                    <td class="level-col">{{ user.level }}</td>
-                    <td class="xp-col">{{ user.xp_formatted }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <div class="leaderboard-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align:center;">Rank</th>
+                            <th>User</th>
+                            <th style="text-align:right;">Level</th>
+                            <th style="text-align:right;">XP</th>
+                            <th style="text-align:right; display: table-cell;">Messages</th>
+                            <th style="text-align:right; display: table-cell;">Voice</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td class="rank-col {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}">
+                                {{ loop.index }}
+                            </td>
+                            <td>
+                                <div class="user-cell">
+                                    <img src="{{ user.avatar_url }}" class="avatar" alt="avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                    <span class="username">
+                                        {{ user.username }}
+                                        <span class="badge">LVL {{ user.level }}</span>
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="stat-col" style="text-align:right;">{{ user.level }}</td>
+                            <td class="stat-col" style="text-align:right;">{{ user.xp_formatted }}</td>
+                            <td class="stat-col sub" style="text-align:right;">{{ user.messages }}</td>
+                            <td class="stat-col sub" style="text-align:right;">{{ user.voice_time }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- === RIGHT SIDE: INFO PANEL === -->
+        <div class="info-panel">
+            
+            <!-- Rank Card Box -->
+            <div class="panel-box">
+                <h3>Rank Card</h3>
+                <p class="sub">Customize your rank card in {{ server_name }}</p>
+                <a href="/dashboard" class="btn-customize">Customize</a>
+            </div>
+
+            <!-- Role Rewards Box -->
+            <div class="panel-box">
+                <h3>Role rewards</h3>
+                <p class="sub">Earn xp by being active to earn role rewards!</p>
+                
+                <div class="roles-grid">
+                    <div class="role-row">
+                        <span class="role-label">Level 2</span>
+                        <span class="role-badge unlocked">Level 2</span>
+                    </div>
+                    <div class="role-row">
+                        <span class="role-label">Level 5</span>
+                        <span class="role-badge locked">Level 5</span>
+                    </div>
+                    <div class="role-row">
+                        <span class="role-label">Level 10</span>
+                        <span class="role-badge locked">Level 10</span>
+                    </div>
+                    <div class="role-row">
+                        <span class="role-label">Level 20</span>
+                        <span class="role-badge locked">Level 20</span>
+                    </div>
+                    <div class="role-row">
+                        <span class="role-label">Level 35</span>
+                        <span class="role-badge locked">Level 35</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
-</div>
 </body>
 </html>
