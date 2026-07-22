@@ -4,8 +4,6 @@ import pymongo
 import os
 import json
 import io
-import asyncio
-import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 import traceback
@@ -314,7 +312,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (WITH DISCORD USER DATA FETCH - FIXED)
+# WEB LEADERBOARD (READS FROM DATABASE - FASTEST METHOD)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
@@ -338,61 +336,30 @@ def web_leaderboard(server_id):
             while int(1000 * ((level + 1) ** 1.5)) <= xp:
                 level += 1
             return level
-
-        # ============================================================
-        # FIXED: DEFINED ASYNCHRONOUS FETCH FUNCTION
-        # ============================================================
-        async def fetch_discord_user(user_id):
-            url = f"https://discord.com/api/v10/users/{user_id}"
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers=headers) as resp:
-                        if resp.status == 200:
-                            return await resp.json()
-            except:
-                pass
-            return None
-
-        async def fetch_all_users_data(user_ids):
-            tasks = [fetch_discord_user(uid) for uid in user_ids]
-            return await asyncio.gather(*tasks)
-        # ============================================================
-
-        user_ids = [doc["user_id"] for doc in results]
         
-        # Run the async fetches synchronously within Flask
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        users_data = loop.run_until_complete(fetch_all_users_data(user_ids))
-        loop.close()
-
-        # Combine data
-        for idx, doc in enumerate(results):
+        has_data = False
+        for doc in results:
+            has_data = True
             user_id = doc["user_id"]
             xp = doc["xp"]
             
             level = get_level_from_xp(xp)
             xp_formatted = format_xp(xp)
             
-            # Default fallback
-            username = f"User {user_id[:4]}"
-            avatar_url = f"https://cdn.discordapp.com/embed/avatars/0.png"
+            # === NEW: Pull directly from the database ===
+            # If the bot stored the username in the DB, use it. Otherwise, fallback to User ID.
+            username = doc.get("username", f"User {user_id[:4]}")
             
-            user_data = users_data[idx]
-            if user_data:
-                username = user_data.get("username", username)
-                avatar_hash = user_data.get("avatar")
-                
-                # If they have a custom avatar
-                if avatar_hash:
-                    ext = "gif" if avatar_hash.startswith("a_") else "png"
-                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
-                else:
-                    default_avatar_id = (int(user_id) >> 22) % 6
-                    avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
+            # If the bot stored the avatar_hash, build the URL. Otherwise, fallback to default.
+            avatar_hash = doc.get("avatar_hash")
+            if avatar_hash:
+                ext = "gif" if avatar_hash.startswith("a_") else "png"
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
+            else:
+                # Default Discord avatar (Blue circle)
+                default_avatar_id = (int(user_id) >> 22) % 6
+                avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
             
-            # Add to list with real data!
             formatted_users.append({
                 "username": username,
                 "avatar_url": avatar_url,
@@ -402,7 +369,7 @@ def web_leaderboard(server_id):
                 "voice_time": "-"
             })
             
-        if not formatted_users:
+        if not has_data:
             return "No level data found for this server.", 404
             
         return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
