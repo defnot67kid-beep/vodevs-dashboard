@@ -11,6 +11,12 @@ import traceback
 app = Flask(__name__)
 
 # ==========================================
+# BASIC AUTH FIX FOR RAILWAY (PROXY HEADERS)
+# ==========================================
+app.config['PROPAGATE_EXCEPTIONS'] = True
+app.config['BASIC_AUTH_FORCE_HTTPS'] = True
+
+# ==========================================
 # SESSION CONFIG (Fixed for Railway)
 # ==========================================
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -38,7 +44,7 @@ else:
     db = client["vodevs_bot_data"]
     levels_collection = db["levels"]
     invites_collection = db["admin_invites"]
-    admins_collection = db["admins"]     # <--- ADDED THIS
+    admins_collection = db["admins"]
     configs_collection = db["config"]
 
 # ==========================================
@@ -102,7 +108,6 @@ def login():
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=identify"
-        # REMOVED &state={token} HERE - It is not needed for standard login
     )
     return redirect(oauth_url)
 
@@ -382,6 +387,7 @@ def web_leaderboard(server_id):
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
+@basic_auth.required  # <--- REQUIRED SO THE BROWSER POPS UP LOGIN
 def admin_panel():
     # Check if they have a basic auth login OR an admin token
     auth = request.authorization
@@ -582,7 +588,7 @@ def admin_signup(token):
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=identify"
-        f"&state={token}"  # <--- FIX: Added the state param so Discord returns it
+        f"&state={token}" 
     )
     return redirect(oauth_url)
 
@@ -607,7 +613,7 @@ def admin_authorize():
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/admin/authorize" # Hardcoded HTTPS for safety
+        "redirect_uri": "https://vodevs-dashboard-production.up.railway.app/admin/authorize"
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
