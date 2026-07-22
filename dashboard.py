@@ -401,7 +401,9 @@ def admin_panel():
 # ==========================================
 # ACTION BRIDGES (FORWARDS ACTIONS TO BOT)
 # ==========================================
-BOT_API_URL = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
+# REPLACED: Uses Railway internal networking. 
+# Make sure your Bot's Railway Service is named "vodevsbot".
+BOT_API_URL = "http://vodevsbot:8080"
 
 @app.route('/api/admin/create_poll', methods=['POST'])
 def api_create_poll():
