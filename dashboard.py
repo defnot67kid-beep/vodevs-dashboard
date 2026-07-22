@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, flash
 from flask_basicauth import BasicAuth
 import pymongo
 import os
@@ -11,13 +11,7 @@ import traceback
 app = Flask(__name__)
 
 # ==========================================
-# BASIC AUTH FIX FOR RAILWAY (PROXY HEADERS)
-# ==========================================
-app.config['PROPAGATE_EXCEPTIONS'] = True
-app.config['BASIC_AUTH_FORCE_HTTPS'] = True
-
-# ==========================================
-# SESSION CONFIG (Fixed for Railway)
+# SESSION CONFIG
 # ==========================================
 app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -33,12 +27,11 @@ CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
 
 # ==========================================
-# MONGODB SETUP (USES ENVIRONMENT VARIABLE)
+# MONGODB SETUP
 # ==========================================
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
     print("⚠️ CRITICAL WARNING: MONGO_URI environment variable is missing!")
-    print("⚠️ The leaderboard and XP data will not load!")
 else:
     client = pymongo.MongoClient(MONGO_URI)
     db = client["vodevs_bot_data"]
@@ -46,13 +39,6 @@ else:
     invites_collection = db["admin_invites"]
     admins_collection = db["admins"]
     configs_collection = db["config"]
-
-# ==========================================
-# SECURITY (Admin Login)
-# ==========================================
-app.config['BASIC_AUTH_USERNAME'] = 'realgyjs@gmail.com'
-app.config['BASIC_AUTH_PASSWORD'] = 'Livetopimo'
-basic_auth = BasicAuth(app)
 
 # ==========================================
 # CONFIGURATION
@@ -136,6 +122,7 @@ def authorize():
         user_info = user_resp.json()
         
         session['user_id'] = user_info['id']
+        session['discord_name'] = user_info.get('global_name', user_info['username'])
         
         return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
     except Exception as e:
@@ -284,7 +271,6 @@ def get_card(guild_id, user_id):
                 font_large = ImageFont.load_default()
                 font_medium = ImageFont.load_default()
 
-        # 6. Draw Text
         text_color = "#000000"
         stats_color = "#3d3d3d"
         center_x = box_x + (box_w / 2) - 10
@@ -320,7 +306,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (READS DIRECTLY FROM DATABASE)
+# WEB LEADERBOARD
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
@@ -383,21 +369,14 @@ def web_leaderboard(server_id):
         return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES
+# SECURE ADMIN ROUTES (SESSION BASED)
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
-@basic_auth.required  # <--- REQUIRED SO THE BROWSER POPS UP LOGIN
 def admin_panel():
-    # Check if they have a basic auth login OR an admin token
-    auth = request.authorization
-    if not auth:
-        return "❌ Please log in with your Admin Username and Password.", 401
-
-    # Check against admin DB
-    admin = admins_collection.find_one({"username": auth.username, "password": auth.password})
-    if not admin:
-        return "❌ Invalid admin credentials.", 401
+    # Check if admin is logged in via session
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login_form'))
 
     # Use the existing admin panel HTML
     global admin_config
@@ -442,6 +421,9 @@ def admin_panel():
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
         <style>
             body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; padding: 20px; text-align: center; }}
+            .nav {{ display: flex; justify-content: flex-end; max-width: 700px; margin: 0 auto 10px auto; }}
+            .nav a {{ color: #ff5555; text-decoration: none; font-weight: bold; background: #2f3136; padding: 8px 16px; border-radius: 8px; border: 1px solid #40444b; }}
+            .nav a:hover {{ background: #3f4146; }}
             .card {{ background: #2f3136; max-width: 700px; margin: 20px auto; padding: 30px; border-radius: 16px; border: 1px solid #40444b; text-align: left; }}
             h1, h2 {{ color: #45ddc0; }}
             label {{ display: block; margin-top: 15px; font-weight: 600; color: #b9bbbe; }}
@@ -480,6 +462,9 @@ def admin_panel():
         </style>
     </head>
     <body>
+        <div class="nav">
+            <a href="/admin/logout">Logout</a>
+        </div>
         <h1>🛠️ Admin Control Panel</h1>
         <div class="msg">{message}</div>
 
@@ -569,18 +554,93 @@ def admin_panel():
     '''
 
 # ==========================================
+# ADMIN LOGIN & LOGOUT (No Basic Auth Popup)
+# ==========================================
+
+@app.route('/admin/login')
+def admin_login_form():
+    if 'admin_id' in session:
+        return redirect(url_for('admin_panel'))
+        
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Login</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 350px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+            h1 { color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }
+            p { color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }
+            form { display: flex; flex-direction: column; gap: 15px; }
+            input { padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; transition: 0.2s; }
+            input:focus { border-color: #5865F2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.2); }
+            button { background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
+            button:hover { background: #4752c4; transform: scale(1.02); }
+            .error { color: #ff5555; font-size: 14px; margin-top: 10px; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>🛡️ Admin Login</h1>
+            <p>Enter your admin credentials.</p>
+            <form method="POST" action="/admin/login">
+                <input type="text" name="username" placeholder="Admin Username" required>
+                <input type="password" name="password" placeholder="Admin Password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login_process():
+    username = request.form.get('username')
+    password = request.form.get('password')
+
+    if not username or not password:
+        return "❌ Username and password required.", 400
+
+    admin = admins_collection.find_one({"username": username, "password": password})
+    if not admin:
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+        <style>body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
+        .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 350px; width: 100%; }
+        h1 { color: #ff5555; } a { color: #5865F2; text-decoration: none; }
+        </style></head>
+        <body><div class="card"><h1>❌ Invalid Credentials</h1><p>Username or password is incorrect.</p><a href="/admin/login">Try again</a></div></body></html>
+        ''', 401
+
+    # Set the session
+    session['admin_id'] = str(admin['_id'])
+    session['admin_username'] = admin['username']
+    
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_id', None)
+    session.pop('admin_username', None)
+    return redirect(url_for('admin_login_form'))
+
+# ==========================================
 # SECURE ADMIN SIGNUP ROUTES
 # ==========================================
 
 @app.route('/admin/signup/<token>')
 def admin_signup(token):
     """Verify the token and prove identity."""
-    # Check if token exists in DB
     invite = invites_collection.find_one({"token": token, "used": False})
     if not invite:
         return "❌ Invalid or already used invite link.", 404
 
-    # Redirect to Discord OAuth2 to prove identity
     redirect_uri = url_for('admin_authorize', _external=True, _scheme='https')
     oauth_url = (
         f"https://discord.com/api/oauth2/authorize"
@@ -594,19 +654,16 @@ def admin_signup(token):
 
 @app.route('/admin/authorize')
 def admin_authorize():
-    """Complete OAuth2 flow and mark token as used."""
     code = request.args.get('code')
     token = request.args.get('state')
     
     if not code or not token:
         return "❌ Missing authorization code or state.", 400
 
-    # Verify the token is valid
     invite = invites_collection.find_one({"token": token, "used": False})
     if not invite:
         return "❌ Invalid or expired invite token.", 404
 
-    # Exchange code for token
     token_url = "https://discord.com/api/oauth2/token"
     data = {
         "client_id": CLIENT_ID,
@@ -622,32 +679,29 @@ def admin_authorize():
         token_data = resp.json()
         access_token = token_data.get("access_token")
 
-        # Fetch user info from Discord
         user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
         user_info = user_resp.json()
         discord_id = str(user_info["id"])
 
-        # Check if the Discord ID matches the invite ID
         if discord_id != invite["discord_id"]:
             return "❌ This Discord account does not match the invite recipient.", 403
 
-        # Mark invite as used
         invites_collection.update_one({"token": token}, {"$set": {"used": True}})
 
-        # Prepare HTML signup form
         return f"""
         <!DOCTYPE html>
         <html>
         <head>
             <title>Create Admin Account</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
             <style>
                 body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-                .card {{ background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; }}
+                .card {{ background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }}
                 h1 {{ color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }}
                 p {{ color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }}
                 form {{ display: flex; flex-direction: column; gap: 15px; }}
-                input {{ padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; }}
+                input {{ padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; transition: 0.2s; }}
                 input:focus {{ border-color: #5865F2; }}
                 button {{ background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }}
                 button:hover {{ background: #4752c4; transform: scale(1.02); }}
@@ -656,7 +710,7 @@ def admin_authorize():
         <body>
             <div class="card">
                 <h1>🛡️ Create Admin Account</h1>
-                <p>Welcome {user_info['username']}! Set up your admin credentials below.</p>
+                <p>Welcome {user_info['username']}! Set up your admin credentials.</p>
                 <form method="POST" action="/admin/register/{discord_id}">
                     <input type="text" name="username" placeholder="Admin Username" required>
                     <input type="password" name="password" placeholder="Admin Password" required>
@@ -671,48 +725,28 @@ def admin_authorize():
 
 @app.route('/admin/register/<discord_id>', methods=['POST'])
 def admin_register(discord_id):
-    """Register the admin account in the database."""
     username = request.form.get('username')
     password = request.form.get('password')
 
     if not username or not password:
         return "❌ Username and password required.", 400
 
-    # Check if this Discord ID already has an admin account
     existing = admins_collection.find_one({"discord_id": discord_id})
     if existing:
         return "❌ This Discord account already has an admin account created.", 400
 
-    # Store the admin (In production, hash the password with bcrypt!)
-    admins_collection.insert_one({
+    # Insert the new admin
+    result = admins_collection.insert_one({
         "discord_id": discord_id,
         "username": username,
-        "password": password  # ⚠️ HASH THIS IN PRODUCTION
+        "password": password
     })
 
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Account Created</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; }
-            h1 { color: #45ddc0; margin: 0; }
-            p { color: #b9bbbe; }
-            a { color: #5865F2; text-decoration: none; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>✅ Account Created!</h1>
-            <p>Your admin account has been successfully created.</p>
-            <p>You can now log in at the <a href="/admin">Admin Panel</a>.</p>
-        </div>
-    </body>
-    </html>
-    """
+    # AUTO LOGIN THE USER IMMEDIATELY!
+    session['admin_id'] = str(result.inserted_id)
+    session['admin_username'] = username
+
+    return redirect(url_for('admin_panel'))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
