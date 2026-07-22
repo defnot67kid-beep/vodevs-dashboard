@@ -41,6 +41,7 @@ else:
     admins_collection = db["admins"]
     configs_collection = db["config"]
     owner_secrets_collection = db["owner_secrets"]
+    user_cache_collection = db["user_cache"] # <-- ADDED THIS
 
 # ==========================================
 # CONFIGURATION
@@ -371,43 +372,7 @@ def web_leaderboard(server_id):
         return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
-# API PROXY (FORWARDS REQUEST TO BOT)
-# ==========================================
-# ==========================================
-# API PROXY (FORWARDS REQUEST TO BOT)
-# ==========================================
-@app.route('/api/proxy/create_reaction_role', methods=['POST'])
-def proxy_create_reaction_role():
-    try:
-        # IMPORTANT: Add https:// prefix here
-        bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
-        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
-        response = requests.post(f"{bot_api_url}/api/create_reaction_role", json=request.get_json(), headers={"Content-Type": "application/json"})
-        return jsonify(response.json()), response.status_code
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/proxy/mod_action', methods=['POST'])
-def proxy_mod_action():
-    try:
-        bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
-        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
-        response = requests.post(f"{bot_api_url}/api/mod_action", json=request.get_json(), headers={"Content-Type": "application/json"})
-        return jsonify(response.json()), response.status_code
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/proxy/get_members', methods=['POST'])
-def proxy_get_members():
-    try:
-        bot_api_url = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
-        if not bot_api_url: return jsonify({"status": "error", "message": "BOT_API_URL env var missing"}), 500
-        response = requests.post(f"{bot_api_url}/api/get_members", json=request.get_json(), headers={"Content-Type": "application/json"})
-        return jsonify(response.json()), response.status_code
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-# ==========================================
-# SECURE ADMIN ROUTES (SESSION BASED - ADVANCED UI)
+# SECURE ADMIN ROUTES (SESSION BASED - MONGODB)
 # ==========================================
 
 @app.route('/admin', methods=['GET'])
@@ -415,7 +380,6 @@ def admin_panel():
     if 'admin_id' not in session:
         return redirect(url_for('admin_login_form'))
 
-    # 1. Fetch Admin info
     admin = admins_collection.find_one({"_id": ObjectId(session['admin_id'])})
     if not admin:
         return redirect(url_for('admin_logout'))
@@ -423,17 +387,16 @@ def admin_panel():
     # ============================================================
     # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
     # ============================================================
-    guild_id = "1526703518818373743" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
+    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
+
+    # 2. FETCH REAL DATA FROM MONGODB CACHE
+    cached_data = user_cache_collection.find_one({"guild_id": guild_id})
+    members = cached_data["members"] if cached_data and "members" in cached_data else []
 
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
-                           guild_id=guild_id) # Pass guild_id to template
-
-@app.route('/admin/mod_action', methods=['POST'])
-def admin_mod_action():
-    if 'admin_id' not in session:
-        return redirect(url_for('admin_login_form'))
-    return redirect(url_for('admin_panel'))
+                           total_members=len(members),
+                           members=members)
 
 @app.route('/admin/create_poll', methods=['POST'])
 def admin_create_poll():
