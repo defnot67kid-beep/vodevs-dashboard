@@ -321,7 +321,6 @@
                 if(response.ok) {
                     alert(`✅ Poll created successfully!`);
                     document.getElementById('pollForm').reset();
-                    // Reset option inputs to basics
                     document.getElementById('poll-options-container').innerHTML = `
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
@@ -373,7 +372,7 @@
         }
 
         // ------------------------------------------
-        // MODERATION MODAL & ACTION
+        // MODERATION MODAL & ACTION (FIXED)
         // ------------------------------------------
         function openModal(userId, userName, action) {
             document.getElementById('modal-overlay').style.display = 'flex';
@@ -415,8 +414,11 @@
                 const result = await response.json();
                 
                 closeModal();
+                
                 if(result.status === 'success') {
-                    alert(`✅ ${result.action.toUpperCase()} executed successfully!`);
+                    // FIX: Safe .toUpperCase() check
+                    const actionName = result.action ? result.action.toUpperCase() : 'Action';
+                    alert(`✅ ${actionName} executed successfully!`);
                 } else {
                     alert(`❌ Error: ${result.message}`);
                 }
