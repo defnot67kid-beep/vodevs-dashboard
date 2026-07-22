@@ -78,10 +78,10 @@
                 <!-- Poll Creator -->
                 <div class="card">
                     <div class="card-title">📊 Create Poll</div>
-                    <form action="/admin/create_poll" method="POST">
+                    <form id="pollForm" onsubmit="submitPoll(event)">
                         <div class="form-group">
                             <label>Poll Question</label>
-                            <input type="text" name="question" class="form-control" required>
+                            <input type="text" name="question" id="poll_question" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label>Options</label>
@@ -91,6 +91,14 @@
                             </div>
                             <button type="button" class="add-option-btn" onclick="addPollOption()">+ Add Option</button>
                         </div>
+                        <div class="form-group">
+                            <label>Duration (e.g. 15m, 1h)</label>
+                            <input type="text" name="duration" id="poll_duration" class="form-control" value="15m" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type (single or multiple)</label>
+                            <input type="text" name="poll_type" id="poll_type" class="form-control" value="single" required>
+                        </div>
                         <button type="submit" class="btn btn-primary">Create Poll</button>
                     </form>
                 </div>
@@ -98,14 +106,14 @@
                 <!-- Announcement Creator -->
                 <div class="card">
                     <div class="card-title">📢 Global Announcement</div>
-                    <form action="/admin/send_announcement" method="POST">
+                    <form id="announcementForm" onsubmit="submitAnnouncement(event)">
                         <div class="form-group">
                             <label>Channel ID (Optional)</label>
-                            <input type="text" name="channel_id" class="form-control" value="1526730287378075648">
+                            <input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648">
                         </div>
                         <div class="form-group">
                             <label>Message Content</label>
-                            <textarea name="content" class="form-control" required placeholder="Enter announcement text here..."></textarea>
+                            <textarea name="content" id="announce_content" class="form-control" required placeholder="Enter announcement text here..."></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary">Send Announcement</button>
                     </form>
@@ -114,24 +122,36 @@
                 <!-- Reaction Roles Configuration -->
                 <div class="card">
                     <div class="card-title">🔘 Create Reaction Role Menu</div>
-                    <form action="/admin/create_reaction_role" method="POST">
+                    <form id="rrForm" onsubmit="createReactionRole(event)">
                         <div class="form-group">
                             <label>Channel ID</label>
-                            <input type="text" name="channel_id" class="form-control" required placeholder="ID of channel to post to">
+                            <input type="text" id="rr_channel_id" class="form-control" required placeholder="ID of channel to post to">
                         </div>
                         <div class="form-group">
                             <label>Title</label>
-                            <input type="text" name="title" class="form-control" required placeholder="Menu Title">
+                            <input type="text" id="rr_title" class="form-control" required placeholder="Menu Title">
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <textarea name="description" class="form-control" placeholder="Description..."></textarea>
+                            <textarea id="rr_description" class="form-control" placeholder="Description..."></textarea>
                         </div>
                         <div class="form-group">
                             <label>Embed Color</label>
-                            <input type="color" name="color" class="form-control" value="#5865F2">
+                            <input type="color" id="rr_color" class="form-control" value="#5865F2">
                         </div>
-                        <button type="submit" class="btn btn-primary">Create Reaction Role Menu</button>
+                        
+                        <div class="card-title" style="margin-top: 15px; border-top: 1px solid #26262e; padding-top: 15px;">Add Roles</div>
+                        <div id="rr_roles_container">
+                            <div class="rr-role-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" placeholder="✅" required></div>
+                                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" placeholder="123456789" required></div>
+                                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc" placeholder="Access to..."></div>
+                            </div>
+                        </div>
+                        <button type="button" class="add-option-btn" style="margin-bottom: 15px;" onclick="addRRRole()">+ Add Role</button>
+
+                        <button type="submit" class="btn btn-primary" id="rrSubmitBtn">Create Reaction Role Menu</button>
+                        <div id="rrResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
                     </form>
                 </div>
             </div>
@@ -189,18 +209,11 @@
         </div>
     </div>
 
-        <script>
+    <script>
         // ------------------------------------------
         // GLOBALS
         // ------------------------------------------
         const GUILD_ID = "{{ guild_id }}"; 
-
-        // ------------------------------------------
-        // LOAD SERVER MEMBERS
-        // ------------------------------------------
-        document.addEventListener('DOMContentLoaded', function() {
-            // No fetch needed here - Members are rendered via Jinja!
-        });
 
         // ------------------------------------------
         // SEARCH USERS
@@ -222,7 +235,7 @@
         }
 
         // ------------------------------------------
-        // POLLS, ANNOUNCEMENTS, REACTION ROLES
+        // CREATE REACTION ROLE
         // ------------------------------------------
         async function createReactionRole(event) {
             event.preventDefault();
@@ -269,39 +282,93 @@
             }
         }
 
-        async function submitPoll(formData) {
+        // ------------------------------------------
+        // SUBMIT POLL
+        // ------------------------------------------
+        async function submitPoll(event) {
+            event.preventDefault();
+            
+            const question = document.getElementById('poll_question').value;
+            const duration = document.getElementById('poll_duration').value;
+            const poll_type = document.getElementById('poll_type').value;
+            
+            const optionsInputs = document.querySelectorAll('#poll-options-container input');
+            const options = [];
+            optionsInputs.forEach(input => {
+                if(input.value.trim() !== '') options.push(input.value.trim());
+            });
+
+            if(options.length < 2) {
+                alert("❌ Please provide at least 2 options.");
+                return;
+            }
+
+            const data = {
+                guild_id: GUILD_ID,
+                question: question,
+                options: options,
+                duration: duration,
+                poll_type: poll_type
+            };
+
             try {
                 const response = await fetch('/api/admin/create_poll', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify(data)
                 });
-                const data = await response.json();
+                const result = await response.json();
                 if(response.ok) {
-                    alert(`✅ Poll created!`);
+                    alert(`✅ Poll created successfully!`);
+                    document.getElementById('pollForm').reset();
+                    // Reset option inputs to basics
+                    document.getElementById('poll-options-container').innerHTML = `
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
+                    `;
                 } else {
-                    alert(`❌ Error: ${data.message}`);
+                    alert(`❌ Error: ${result.message}`);
                 }
             } catch (e) {
-                alert(`❌ Connection Error: ${e}`);
+                alert(`❌ Failed to connect to bot: ${e}`);
             }
         }
 
-        async function submitAnnouncement(formData) {
+        // ------------------------------------------
+        // SUBMIT ANNOUNCEMENT
+        // ------------------------------------------
+        async function submitAnnouncement(event) {
+            event.preventDefault();
+            
+            const channelId = document.getElementById('announce_channel').value;
+            const content = document.getElementById('announce_content').value;
+
+            if(!content.trim()) {
+                alert("❌ Announcement content cannot be empty.");
+                return;
+            }
+
+            const data = {
+                guild_id: GUILD_ID,
+                channel_id: channelId,
+                content: content
+            };
+
             try {
                 const response = await fetch('/api/admin/send_announcement', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify(data)
                 });
-                const data = await response.json();
+                const result = await response.json();
                 if(response.ok) {
                     alert(`✅ Announcement sent!`);
+                    document.getElementById('announcementForm').reset();
                 } else {
-                    alert(`❌ Error: ${data.message}`);
+                    alert(`❌ Error: ${result.message}`);
                 }
             } catch (e) {
-                alert(`❌ Connection Error: ${e}`);
+                alert(`❌ Failed to connect to bot: ${e}`);
             }
         }
 
