@@ -398,7 +398,8 @@ def admin_panel():
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
                            total_members=len(members),
-                           members=members)
+                           members=members,
+                           guild_id=guild_id) # <--- PASSED guild_id HERE
 
 # ==========================================
 # QUEUE ACTIONS TO MONGODB (THE PURE DB WAY)
