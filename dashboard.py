@@ -350,8 +350,11 @@ def web_leaderboard(server_id):
             
             avatar_hash = doc.get("avatar_hash")
             if avatar_hash:
-                ext = "gif" if avatar_hash.startswith("a_") else "png"
-                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
+                # =========================================================
+                # THE FIX: FORCE .png INSTEAD OF .gif FOR 100% COMPATIBILITY
+                # =========================================================
+                # Even if the hash starts with "a_", we force .png so it always loads.
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=256"
             else:
                 default_avatar_id = (int(user_id) >> 22) % 6
                 avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
