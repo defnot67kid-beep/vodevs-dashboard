@@ -562,6 +562,151 @@ def admin_panel():
     </html>
     '''
 
+# ==========================================
+# SECURE ADMIN SIGNUP ROUTES (NEW)
+# ==========================================
+
+@app.route('/admin/signup/<token>')
+def admin_signup(token):
+    """Verify the token and prove identity."""
+    # Check if token exists in DB
+    invite = invites_collection.find_one({"token": token, "used": False})
+    if not invite:
+        return "❌ Invalid or already used invite link.", 404
+
+    # Redirect to Discord OAuth2 to prove identity
+    redirect_uri = url_for('admin_authorize', _external=True)
+    oauth_url = (
+        f"https://discord.com/api/oauth2/authorize"
+        f"?client_id={CLIENT_ID}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope=identify"
+    )
+    return redirect(oauth_url)
+
+@app.route('/admin/authorize')
+def admin_authorize():
+    """Complete OAuth2 flow and mark token as used."""
+    code = request.args.get('code')
+    token = request.args.get('state')
+    
+    if not code or not token:
+        return "❌ Missing authorization code or state.", 400
+
+    # Verify the token is valid
+    invite = invites_collection.find_one({"token": token, "used": False})
+    if not invite:
+        return "❌ Invalid or expired invite token.", 404
+
+    # Exchange code for token
+    token_url = "https://discord.com/api/oauth2/token"
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": url_for('admin_authorize', _external=True)
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    try:
+        resp = requests.post(token_url, data=data, headers=headers)
+        token_data = resp.json()
+        access_token = token_data.get("access_token")
+
+        # Fetch user info from Discord
+        user_resp = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {access_token}"})
+        user_info = user_resp.json()
+        discord_id = str(user_info["id"])
+
+        # Check if the Discord ID matches the invite ID
+        if discord_id != invite["discord_id"]:
+            return "❌ This Discord account does not match the invite recipient.", 403
+
+        # Mark invite as used
+        invites_collection.update_one({"token": token}, {"$set": {"used": True}})
+
+        # Prepare HTML signup form
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Create Admin Account</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+                .card {{ background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; }}
+                h1 {{ color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }}
+                p {{ color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }}
+                form {{ display: flex; flex-direction: column; gap: 15px; }}
+                input {{ padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; }}
+                input:focus {{ border-color: #5865F2; }}
+                button {{ background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }}
+                button:hover {{ background: #4752c4; transform: scale(1.02); }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>🛡️ Create Admin Account</h1>
+                <p>Welcome {user_info['username']}! Set up your admin credentials below.</p>
+                <form method="POST" action="/admin/register/{discord_id}">
+                    <input type="text" name="username" placeholder="Admin Username" required>
+                    <input type="password" name="password" placeholder="Admin Password" required>
+                    <button type="submit">Create Account</button>
+                </form>
+            </div>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"❌ Authentication failed: {e}", 500
+
+@app.route('/admin/register/<discord_id>', methods=['POST'])
+def admin_register(discord_id):
+    """Register the admin account in the database."""
+    username = request.form.get('username')
+    password = request.form.get('password')
+
+    if not username or not password:
+        return "❌ Username and password required.", 400
+
+    # Check if this Discord ID already has an admin account
+    existing = admins_collection.find_one({"discord_id": discord_id})
+    if existing:
+        return "❌ This Discord account already has an admin account created.", 400
+
+    # Store the admin (In production, hash the password with bcrypt!)
+    admins_collection.insert_one({
+        "discord_id": discord_id,
+        "username": username,
+        "password": password  # ⚠️ HASH THIS IN PRODUCTION
+    })
+
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Account Created</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 400px; width: 100%; text-align: center; }
+            h1 { color: #45ddc0; margin: 0; }
+            p { color: #b9bbbe; }
+            a { color: #5865F2; text-decoration: none; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>✅ Account Created!</h1>
+            <p>Your admin account has been successfully created.</p>
+            <p>You can now log in at the <a href="/admin">Admin Panel</a>.</p>
+        </div>
+    </body>
+    </html>
+    """
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
