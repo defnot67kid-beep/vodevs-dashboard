@@ -382,8 +382,18 @@ def web_leaderboard(server_id):
 # ==========================================
 
 @app.route('/admin', methods=['GET', 'POST'])
-@basic_auth.required
 def admin_panel():
+    # Check if they have a basic auth login OR an admin token
+    auth = request.authorization
+    if not auth:
+        return "❌ Please log in with your Admin Username and Password.", 401
+
+    # Check against admin DB
+    admin = admins_collection.find_one({"username": auth.username, "password": auth.password})
+    if not admin:
+        return "❌ Invalid admin credentials.", 401
+
+    # Use the existing admin panel HTML
     global admin_config
     message = ""
     
