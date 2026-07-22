@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 import traceback
 from bson.objectid import ObjectId
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -42,6 +43,7 @@ else:
     configs_collection = db["config"]
     owner_secrets_collection = db["owner_secrets"]
     user_cache_collection = db["user_cache"]
+    admin_actions_collection = db["admin_actions"] # <-- NEW QUEUE
 
 # ==========================================
 # CONFIGURATION
@@ -387,7 +389,7 @@ def admin_panel():
     # ============================================================
     # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
     # ============================================================
-    guild_id = "1526703518818373743" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
+    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
 
     # FETCH REAL DATA FROM MONGODB CACHE
     cached_data = user_cache_collection.find_one({"guild_id": guild_id})
@@ -399,45 +401,52 @@ def admin_panel():
                            members=members)
 
 # ==========================================
-# ACTION BRIDGES (FORWARDS ACTIONS TO BOT)
+# QUEUE ACTIONS TO MONGODB (THE PURE DB WAY)
 # ==========================================
-# REPLACED: Uses Railway internal networking. 
-# Make sure your Bot's Railway Service is named "vodevsbot".
-BOT_API_URL = "http://VoDevsBot:8080"
 
 @app.route('/api/admin/create_poll', methods=['POST'])
 def api_create_poll():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
 
     data = request.get_json()
+    data['type'] = 'poll'
+    data['guild_id'] = data.get('guild_id')
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
     try:
-        response = requests.post(f"{BOT_API_URL}/api/admin/create_poll", json=data, headers={"Content-Type": "application/json"}, timeout=10)
-        return jsonify(response.json()), response.status_code
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Poll queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admin/mod_action', methods=['POST'])
 def api_mod_action():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
 
     data = request.get_json()
+    data['type'] = 'mod_action'
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
     try:
-        response = requests.post(f"{BOT_API_URL}/api/admin/mod_action", json=data, headers={"Content-Type": "application/json"}, timeout=10)
-        return jsonify(response.json()), response.status_code
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Mod action queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admin/send_announcement', methods=['POST'])
 def api_send_announcement():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
 
     data = request.get_json()
+    data['type'] = 'announcement'
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
     try:
-        response = requests.post(f"{BOT_API_URL}/api/admin/send_announcement", json=data, headers={"Content-Type": "application/json"}, timeout=10)
-        return jsonify(response.json()), response.status_code
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Announcement queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
