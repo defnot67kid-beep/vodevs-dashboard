@@ -312,7 +312,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (READS FROM DATABASE - FASTEST METHOD)
+# WEB LEADERBOARD (READS DIRECTLY FROM DATABASE)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
@@ -321,7 +321,6 @@ def web_leaderboard(server_id):
         if not MONGO_URI:
             return "MongoDB URI not configured. Please set the MONGO_URI environment variable.", 500
 
-        # Fetch from MongoDB
         results = levels_collection.find({"guild_id": server_id}).sort("xp", pymongo.DESCENDING).limit(100)
         
         formatted_users = []
@@ -346,17 +345,14 @@ def web_leaderboard(server_id):
             level = get_level_from_xp(xp)
             xp_formatted = format_xp(xp)
             
-            # === NEW: Pull directly from the database ===
-            # If the bot stored the username in the DB, use it. Otherwise, fallback to User ID.
+            # === PULL DATA DIRECTLY FROM THE DATABASE ===
             username = doc.get("username", f"User {user_id[:4]}")
             
-            # If the bot stored the avatar_hash, build the URL. Otherwise, fallback to default.
             avatar_hash = doc.get("avatar_hash")
             if avatar_hash:
                 ext = "gif" if avatar_hash.startswith("a_") else "png"
                 avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
             else:
-                # Default Discord avatar (Blue circle)
                 default_avatar_id = (int(user_id) >> 22) % 6
                 avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
             
