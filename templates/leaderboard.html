@@ -251,7 +251,11 @@
                             </td>
                             <td>
                                 <div class="user-cell">
-                                    <img src="{{ user.avatar_url }}" class="avatar" alt="avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                    {% if user.is_animated %}
+                                        <img src="{{ user.avatar_url }}" class="avatar" alt="avatar" style="image-rendering: auto;" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                    {% else %}
+                                        <img src="{{ user.avatar_url }}" class="avatar" alt="avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                                    {% endif %}
                                     <span class="username">
                                         {{ user.username }}
                                         <span class="badge">LVL {{ user.level }}</span>
