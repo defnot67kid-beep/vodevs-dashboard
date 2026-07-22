@@ -114,36 +114,24 @@
                 <!-- Reaction Roles Configuration -->
                 <div class="card">
                     <div class="card-title">🔘 Create Reaction Role Menu</div>
-                    <form id="rrForm" onsubmit="createReactionRole(event)">
+                    <form action="/admin/create_reaction_role" method="POST">
                         <div class="form-group">
                             <label>Channel ID</label>
-                            <input type="text" id="rr_channel_id" class="form-control" required placeholder="ID of channel to post to">
+                            <input type="text" name="channel_id" class="form-control" required placeholder="ID of channel to post to">
                         </div>
                         <div class="form-group">
                             <label>Title</label>
-                            <input type="text" id="rr_title" class="form-control" required placeholder="Menu Title">
+                            <input type="text" name="title" class="form-control" required placeholder="Menu Title">
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <textarea id="rr_description" class="form-control" placeholder="Description..."></textarea>
+                            <textarea name="description" class="form-control" placeholder="Description..."></textarea>
                         </div>
                         <div class="form-group">
                             <label>Embed Color</label>
-                            <input type="color" id="rr_color" class="form-control" value="#5865F2">
+                            <input type="color" name="color" class="form-control" value="#5865F2">
                         </div>
-                        
-                        <div class="card-title" style="margin-top: 15px; border-top: 1px solid #26262e; padding-top: 15px;">Add Roles</div>
-                        <div id="rr_roles_container">
-                            <div class="rr-role-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
-                                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" placeholder="✅" required></div>
-                                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" placeholder="123456789" required></div>
-                                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc" placeholder="Access to..."></div>
-                            </div>
-                        </div>
-                        <button type="button" class="add-option-btn" style="margin-bottom: 15px;" onclick="addRRRole()">+ Add Role</button>
-
-                        <button type="submit" class="btn btn-primary" id="rrSubmitBtn">Create Reaction Role Menu</button>
-                        <div id="rrResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
+                        <button type="submit" class="btn btn-primary">Create Reaction Role Menu</button>
                     </form>
                 </div>
             </div>
@@ -152,11 +140,24 @@
             <div class="right-content">
                 <!-- User Search -->
                 <div class="card">
-                    <div class="card-title">👥 Server Members <span id="memberCount">(Loading...)</span></div>
+                    <div class="card-title">👥 Server Members ({{ total_members }})</div>
                     <input type="text" id="userSearchInput" class="search-bar" placeholder="🔍 Search by username or ID..." onkeyup="filterUsers()">
                     
                     <div id="userListContainer">
-                        <div style="padding: 20px; color: #b9bbbe; text-align: center;">Loading members from Discord...</div>
+                        {% for user in members %}
+                        <div class="user-row" data-username="{{ user.name.lower() }}" data-id="{{ user.id }}">
+                            <img src="{{ user.avatar_url }}" class="user-avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                            <span class="user-name">{{ user.name }}</span>
+                            <span class="status-badge status-{{ user.status }}">{{ user.status }}</span>
+                            
+                            <div class="user-actions">
+                                <button class="btn btn-timeout" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'timeout')">Timeout</button>
+                                <button class="btn btn-mute" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'mute')">Mute</button>
+                                <button class="btn btn-kick" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'kick')">Kick</button>
+                                <button class="btn btn-ban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'ban')">Ban</button>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -189,66 +190,7 @@
     </div>
 
     <script>
-        // ------------------------------------------
-        // GLOBALS
-        // ------------------------------------------
-        const GUILD_ID = "{{ guild_id }}"; 
-
-        // ------------------------------------------
-        // LOAD SERVER MEMBERS ON PAGE LOAD
-        // ------------------------------------------
-        document.addEventListener('DOMContentLoaded', async function() {
-            const container = document.getElementById('userListContainer');
-            const memberCount = document.getElementById('memberCount');
-
-            try {
-                const response = await fetch('/api/proxy/get_members', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID })
-                });
-                const data = await response.json();
-
-                if(data.status === 'success') {
-                    memberCount.innerText = `(${data.members.length})`;
-                    container.innerHTML = ''; 
-
-                    if(data.members.length === 0) {
-                        container.innerHTML = '<div style="padding: 20px; color: #b9bbbe; text-align: center;">No members found. Is the bot in the server?</div>';
-                        return;
-                    }
-
-                    data.members.forEach(user => {
-                        const row = document.createElement('div');
-                        row.className = 'user-row';
-                        row.setAttribute('data-username', user.name.toLowerCase());
-                        row.setAttribute('data-id', user.id);
-                        
-                        row.innerHTML = `
-                            <img src="${user.avatar_url}" class="user-avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
-                            <span class="user-name">${user.name}</span>
-                            <span class="status-badge status-${user.status}">${user.status}</span>
-                            
-                            <div class="user-actions">
-                                <button class="btn btn-timeout" onclick="openModal('${user.id}', '${user.name}', 'timeout')">Timeout</button>
-                                <button class="btn btn-mute" onclick="openModal('${user.id}', '${user.name}', 'mute')">Mute</button>
-                                <button class="btn btn-kick" onclick="openModal('${user.id}', '${user.name}', 'kick')">Kick</button>
-                                <button class="btn btn-ban" onclick="openModal('${user.id}', '${user.name}', 'ban')">Ban</button>
-                            </div>
-                        `;
-                        container.appendChild(row);
-                    });
-                } else {
-                    container.innerHTML = `<div style="padding: 20px; color: #ff5555; text-align: center;">Error: ${data.message}</div>`;
-                }
-            } catch (e) {
-                container.innerHTML = `<div style="padding: 20px; color: #ff5555; text-align: center;">Failed to connect to bot API: ${e}</div>`;
-            }
-        });
-
-        // ------------------------------------------
-        // SEARCH USERS
-        // ------------------------------------------
+        // Search Users
         function filterUsers() {
             const input = document.getElementById('userSearchInput');
             const filter = input.value.toLowerCase();
@@ -265,57 +207,7 @@
             });
         }
 
-        // ------------------------------------------
-        // CREATE REACTION ROLE
-        // ------------------------------------------
-        async function createReactionRole(event) {
-            event.preventDefault();
-            const btn = document.getElementById('rrSubmitBtn');
-            const resultDiv = document.getElementById('rrResult');
-            
-            btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
-
-            const channelId = document.getElementById('rr_channel_id').value;
-            const title = document.getElementById('rr_title').value;
-            const description = document.getElementById('rr_description').value;
-            const color = document.getElementById('rr_color').value;
-
-            const roleRows = document.querySelectorAll('.rr-role-row');
-            const roles = [];
-            roleRows.forEach(row => {
-                const emoji = row.querySelector('.rr-emoji').value;
-                const roleId = row.querySelector('.rr-roleid').value;
-                const desc = row.querySelector('.rr-desc').value;
-                if(emoji && roleId) roles.push({ emoji, role_id: parseInt(roleId), description: desc });
-            });
-
-            if(roles.length === 0) {
-                resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Please add at least one role.";
-                btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; return;
-            }
-
-            try {
-                const response = await fetch('/api/proxy/create_reaction_role', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles })
-                });
-                const data = await response.json();
-                if(response.ok) {
-                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Created! Message ID: ${data.message_id}`;
-                } else {
-                    resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`;
-                }
-            } catch (e) {
-                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`;
-            } finally {
-                btn.disabled = false; btn.innerText = "Create Reaction Role Menu";
-            }
-        }
-
-        // ------------------------------------------
-        // MODERATION MODAL & ACTION
-        // ------------------------------------------
+        // Moderation Modal Logic
         function openModal(userId, userName, action) {
             document.getElementById('modal-overlay').style.display = 'flex';
             document.getElementById('modalUserId').value = userId;
@@ -337,60 +229,14 @@
         document.getElementById('modal-overlay').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
         });
-
-        // SEND MODERATION ACTION TO BOT
-        document.getElementById('modalForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const btn = document.querySelector('#modalForm .btn-primary');
-            btn.disabled = true; btn.innerText = "Executing...";
-
-            const formData = new FormData(this);
-            const data = Object.fromEntries(formData.entries());
-            data.guild_id = GUILD_ID;
-
-            try {
-                const response = await fetch('/api/proxy/mod_action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                const result = await response.json();
-                
-                closeModal();
-                if(result.status === 'success') {
-                    alert(`✅ ${result.action.toUpperCase()} executed successfully!`);
-                } else {
-                    alert(`❌ Error: ${result.message}`);
-                }
-            } catch (e) {
-                alert(`❌ Failed to contact bot: ${e}`);
-            } finally {
-                btn.disabled = false; btn.innerText = "Execute Action";
-            }
-        });
-
-        // ------------------------------------------
-        // HELPERS FOR ADDING OPTIONS
-        // ------------------------------------------
+        
+        // Add Poll Options
         function addPollOption() {
             const container = document.getElementById('poll-options-container');
             const count = container.children.length + 1;
             const div = document.createElement('div');
             div.className = 'poll-option';
             div.innerHTML = `<input type="text" name="options[]" class="form-control" placeholder="Option ${count}" required>`;
-            container.appendChild(div);
-        }
-
-        function addRRRole() {
-            const container = document.getElementById('rr_roles_container');
-            const div = document.createElement('div');
-            div.className = 'rr-role-row';
-            div.style = "display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;";
-            div.innerHTML = `
-                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" placeholder="✅" required></div>
-                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" placeholder="123456789" required></div>
-                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc" placeholder="Access to..."></div>
-            `;
             container.appendChild(div);
         }
     </script>
