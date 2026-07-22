@@ -4,6 +4,7 @@ import pymongo
 import os
 import json
 import io
+import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 import traceback
@@ -312,7 +313,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (VORTEX STYLE)
+# WEB LEADERBOARD (WITH DISCORD USER DATA FETCH)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
@@ -337,20 +338,54 @@ def web_leaderboard(server_id):
                 level += 1
             return level
         
-        has_data = False
+        # ============================================================
+        # FETCH REAL USER DATA FROM DISCORD API
+        # ============================================================
+        async def fetch_discord_user(user_id):
+            url = f"https://discord.com/api/v10/users/{user_id}"
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return data
+            except:
+                pass
+            return None
+        # ============================================================
+
+        # Loop through results and fetch user data
         for doc in results:
-            has_data = True
             user_id = doc["user_id"]
             xp = doc["xp"]
             
             level = get_level_from_xp(xp)
             xp_formatted = format_xp(xp)
-            avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
             
-            # NOTE: Messages and Voice Time are placeholders. 
-            # The bot does not currently track these stats.
+            # Default fallback
+            username = f"User {user_id[:4]}"
+            avatar_url = f"https://cdn.discordapp.com/embed/avatars/0.png"
+            
+            # Fetch real user data
+            user_data = await fetch_discord_user(user_id)
+            if user_data:
+                username = user_data.get("username", username)
+                avatar_hash = user_data.get("avatar")
+                
+                # If they have a custom avatar
+                if avatar_hash:
+                    # Check if it's animated (starts with "a_")
+                    ext = "gif" if avatar_hash.startswith("a_") else "png"
+                    avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
+                else:
+                    # Default avatar (Blue, Orange, Green, etc.)
+                    default_avatar_id = (int(user_id) >> 22) % 6
+                    avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
+            
+            # Add to list with real data!
             formatted_users.append({
-                "username": f"User {user_id[:4]}",
+                "username": username,
                 "avatar_url": avatar_url,
                 "level": level,
                 "xp_formatted": xp_formatted,
@@ -358,7 +393,7 @@ def web_leaderboard(server_id):
                 "voice_time": "-"
             })
             
-        if not has_data:
+        if not formatted_users:
             return "No level data found for this server.", 404
             
         return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
