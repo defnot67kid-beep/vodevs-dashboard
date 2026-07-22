@@ -41,7 +41,7 @@ else:
     admins_collection = db["admins"]
     configs_collection = db["config"]
     owner_secrets_collection = db["owner_secrets"]
-    user_cache_collection = db["user_cache"] # <-- ADDED THIS
+    user_cache_collection = db["user_cache"]
 
 # ==========================================
 # CONFIGURATION
@@ -387,9 +387,9 @@ def admin_panel():
     # ============================================================
     # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
     # ============================================================
-    guild_id = "1526703518818373743" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
+    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
 
-    # 2. FETCH REAL DATA FROM MONGODB CACHE
+    # FETCH REAL DATA FROM MONGODB CACHE
     cached_data = user_cache_collection.find_one({"guild_id": guild_id})
     members = cached_data["members"] if cached_data and "members" in cached_data else []
 
@@ -398,17 +398,46 @@ def admin_panel():
                            total_members=len(members),
                            members=members)
 
-@app.route('/admin/create_poll', methods=['POST'])
-def admin_create_poll():
-    if 'admin_id' not in session:
-        return redirect(url_for('admin_login_form'))
-    return redirect(url_for('admin_panel'))
+# ==========================================
+# ACTION BRIDGES (FORWARDS ACTIONS TO BOT)
+# ==========================================
+BOT_API_URL = os.getenv("BOT_API_URL", "https://vodevsbot-production-820d.up.railway.app")
 
-@app.route('/admin/send_announcement', methods=['POST'])
-def admin_send_announcement():
-    if 'admin_id' not in session:
-        return redirect(url_for('admin_login_form'))
-    return redirect(url_for('admin_panel'))
+@app.route('/api/admin/create_poll', methods=['POST'])
+def api_create_poll():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
+
+    data = request.get_json()
+    try:
+        response = requests.post(f"{BOT_API_URL}/api/admin/create_poll", json=data, headers={"Content-Type": "application/json"}, timeout=10)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/mod_action', methods=['POST'])
+def api_mod_action():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
+
+    data = request.get_json()
+    try:
+        response = requests.post(f"{BOT_API_URL}/api/admin/mod_action", json=data, headers={"Content-Type": "application/json"}, timeout=10)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/send_announcement', methods=['POST'])
+def api_send_announcement():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+    if not BOT_API_URL: return jsonify({"status": "error", "message": "BOT_API_URL missing"}), 500
+
+    data = request.get_json()
+    try:
+        response = requests.post(f"{BOT_API_URL}/api/admin/send_announcement", json=data, headers={"Content-Type": "application/json"}, timeout=10)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ==========================================
 # ADMIN LOGIN & LOGOUT
