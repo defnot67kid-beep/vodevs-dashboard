@@ -189,8 +189,22 @@
         </div>
     </div>
 
-    <script>
-        // Search Users
+        <script>
+        // ------------------------------------------
+        // GLOBALS
+        // ------------------------------------------
+        const GUILD_ID = "{{ guild_id }}"; 
+
+        // ------------------------------------------
+        // LOAD SERVER MEMBERS
+        // ------------------------------------------
+        document.addEventListener('DOMContentLoaded', function() {
+            // No fetch needed here - Members are rendered via Jinja!
+        });
+
+        // ------------------------------------------
+        // SEARCH USERS
+        // ------------------------------------------
         function filterUsers() {
             const input = document.getElementById('userSearchInput');
             const filter = input.value.toLowerCase();
@@ -207,7 +221,93 @@
             });
         }
 
-        // Moderation Modal Logic
+        // ------------------------------------------
+        // POLLS, ANNOUNCEMENTS, REACTION ROLES
+        // ------------------------------------------
+        async function createReactionRole(event) {
+            event.preventDefault();
+            const btn = document.getElementById('rrSubmitBtn');
+            const resultDiv = document.getElementById('rrResult');
+            
+            btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
+
+            const channelId = document.getElementById('rr_channel_id').value;
+            const title = document.getElementById('rr_title').value;
+            const description = document.getElementById('rr_description').value;
+            const color = document.getElementById('rr_color').value;
+
+            const roleRows = document.querySelectorAll('.rr-role-row');
+            const roles = [];
+            roleRows.forEach(row => {
+                const emoji = row.querySelector('.rr-emoji').value;
+                const roleId = row.querySelector('.rr-roleid').value;
+                const desc = row.querySelector('.rr-desc').value;
+                if(emoji && roleId) roles.push({ emoji, role_id: parseInt(roleId), description: desc });
+            });
+
+            if(roles.length === 0) {
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Please add at least one role.";
+                btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/create_reaction_role', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles })
+                });
+                const data = await response.json();
+                if(response.ok) {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Created! Message ID: ${data.message_id}`;
+                } else {
+                    resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`;
+                }
+            } catch (e) {
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`;
+            } finally {
+                btn.disabled = false; btn.innerText = "Create Reaction Role Menu";
+            }
+        }
+
+        async function submitPoll(formData) {
+            try {
+                const response = await fetch('/api/admin/create_poll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const data = await response.json();
+                if(response.ok) {
+                    alert(`✅ Poll created!`);
+                } else {
+                    alert(`❌ Error: ${data.message}`);
+                }
+            } catch (e) {
+                alert(`❌ Connection Error: ${e}`);
+            }
+        }
+
+        async function submitAnnouncement(formData) {
+            try {
+                const response = await fetch('/api/admin/send_announcement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const data = await response.json();
+                if(response.ok) {
+                    alert(`✅ Announcement sent!`);
+                } else {
+                    alert(`❌ Error: ${data.message}`);
+                }
+            } catch (e) {
+                alert(`❌ Connection Error: ${e}`);
+            }
+        }
+
+        // ------------------------------------------
+        // MODERATION MODAL & ACTION
+        // ------------------------------------------
         function openModal(userId, userName, action) {
             document.getElementById('modal-overlay').style.display = 'flex';
             document.getElementById('modalUserId').value = userId;
@@ -229,14 +329,59 @@
         document.getElementById('modal-overlay').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
         });
-        
-        // Add Poll Options
+
+        document.getElementById('modalForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.querySelector('#modalForm .btn-primary');
+            btn.disabled = true; btn.innerText = "Executing...";
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            data.guild_id = GUILD_ID;
+
+            try {
+                const response = await fetch('/api/admin/mod_action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                
+                closeModal();
+                if(result.status === 'success') {
+                    alert(`✅ ${result.action.toUpperCase()} executed successfully!`);
+                } else {
+                    alert(`❌ Error: ${result.message}`);
+                }
+            } catch (e) {
+                alert(`❌ Failed to contact bot: ${e}`);
+            } finally {
+                btn.disabled = false; btn.innerText = "Execute Action";
+            }
+        });
+
+        // ------------------------------------------
+        // HELPERS FOR ADDING OPTIONS
+        // ------------------------------------------
         function addPollOption() {
             const container = document.getElementById('poll-options-container');
             const count = container.children.length + 1;
             const div = document.createElement('div');
             div.className = 'poll-option';
             div.innerHTML = `<input type="text" name="options[]" class="form-control" placeholder="Option ${count}" required>`;
+            container.appendChild(div);
+        }
+
+        function addRRRole() {
+            const container = document.getElementById('rr_roles_container');
+            const div = document.createElement('div');
+            div.className = 'rr-role-row';
+            div.style = "display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;";
+            div.innerHTML = `
+                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" placeholder="✅" required></div>
+                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" placeholder="123456789" required></div>
+                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc" placeholder="Access to..."></div>
+            `;
             container.appendChild(div);
         }
     </script>
