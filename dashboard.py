@@ -312,7 +312,7 @@ def get_card(guild_id, user_id):
         return f"❌ Image generation failed", 500
 
 # ==========================================
-# WEB LEADERBOARD (MONGODB VERSION)
+# WEB LEADERBOARD (VORTEX STYLE)
 # ==========================================
 
 @app.route('/leaderboard/<server_id>')
@@ -347,11 +347,15 @@ def web_leaderboard(server_id):
             xp_formatted = format_xp(xp)
             avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{user_id}.png"
             
+            # NOTE: Messages and Voice Time are placeholders. 
+            # The bot does not currently track these stats.
             formatted_users.append({
                 "username": f"User {user_id[:4]}",
                 "avatar_url": avatar_url,
                 "level": level,
-                "xp_formatted": xp_formatted
+                "xp_formatted": xp_formatted,
+                "messages": "0",
+                "voice_time": "-"
             })
             
         if not has_data:
