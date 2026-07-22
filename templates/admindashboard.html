@@ -244,7 +244,7 @@
             });
         }
 
-        // Send Reaction Role Data to Bot API
+        // Send Reaction Role Data to Bot API via Dashboard Proxy
         async function createReactionRole(event) {
             event.preventDefault();
             const btn = document.getElementById('rrSubmitBtn');
@@ -274,8 +274,8 @@
             }
 
             try {
-                // Note: The bot's internal API runs on port 5001
-                const response = await fetch('http://localhost:5001/api/create_reaction_role', {
+                // PROXY REQUEST VIA THE DASHBOARD
+                const response = await fetch('/api/proxy/create_reaction_role', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: guildId, channel_id: parseInt(channelId), title, description, color, roles })
