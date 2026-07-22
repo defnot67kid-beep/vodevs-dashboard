@@ -576,7 +576,7 @@ def admin_signup(token):
         return "❌ Invalid or already used invite link.", 404
 
     # Redirect to Discord OAuth2 to prove identity
-    redirect_uri = url_for('admin_authorize', _external=True)
+    redirect_uri = url_for('admin_authorize', _external=True, _scheme='https')
     oauth_url = (
         f"https://discord.com/api/oauth2/authorize"
         f"?client_id={CLIENT_ID}"
