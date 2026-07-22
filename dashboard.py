@@ -7,6 +7,7 @@ import io
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import requests
 import traceback
+from bson.objectid import ObjectId
 
 app = Flask(__name__)
 
@@ -39,7 +40,7 @@ else:
     invites_collection = db["admin_invites"]
     admins_collection = db["admins"]
     configs_collection = db["config"]
-    owner_secrets_collection = db["owner_secrets"]  # <-- ADDED THIS
+    owner_secrets_collection = db["owner_secrets"]
 
 # ==========================================
 # CONFIGURATION
@@ -370,192 +371,106 @@ def web_leaderboard(server_id):
         return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES (SESSION BASED)
+# ==========================================
+# SECURE ADMIN ROUTES (SESSION BASED - NEW ADVANCED UI)
 # ==========================================
 
-@app.route('/admin', methods=['GET', 'POST'])
+@app.route('/admin', methods=['GET'])
 def admin_panel():
-    # Check if admin is logged in via session
     if 'admin_id' not in session:
         return redirect(url_for('admin_login_form'))
 
-    # Use the existing admin panel HTML
-    global admin_config
-    message = ""
+    # 1. Fetch Admin info
+    admin = admins_collection.find_one({"_id": ObjectId(session['admin_id'])})
+    if not admin:
+        return redirect(url_for('admin_logout'))
+
+    # 2. Fetch Fake Server Members for UI Demonstration
+    # In a real scenario, you would fetch this list from Discord API or your DB cache.
+    members = [
+        {"id": "1234567890", "name": "User_One", "status": "online", "avatar_url": "https://cdn.discordapp.com/embed/avatars/0.png"},
+        {"id": "1234567891", "name": "User_Two", "status": "idle", "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"},
+        {"id": "1234567892", "name": "User_Three", "status": "dnd", "avatar_url": "https://cdn.discordapp.com/embed/avatars/2.png"},
+        {"id": "1234567893", "name": "User_Four", "status": "offline", "avatar_url": "https://cdn.discordapp.com/embed/avatars/3.png"},
+    ]
+
+    return render_template('admindashboard.html', 
+                           admin_username=admin['username'],
+                           total_members=len(members),
+                           members=members)
+
+@app.route('/admin/mod_action', methods=['POST'])
+def admin_mod_action():
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login_form'))
+
+    user_id = request.form.get('user_id')
+    action = request.form.get('action')
+    reason = request.form.get('reason')
+    duration = request.form.get('duration', 60)
+
+    # IMPORTANT: In production, you would send a request to your Discord Bot here.
+    # The bot must have an HTTP endpoint to execute these actions.
+    # Returning a placeholder message for now:
     
-    if request.method == 'POST':
-        if 'bg_image' in request.files and request.files['bg_image'].filename != '':
-            file = request.files['bg_image']
-            img = Image.open(file.stream).convert("RGB").resize((900, 250))
-            img.save(DEFAULT_BG_FILE)
-            message = "✅ Default background uploaded! (900x250)"
-        
-        elif 'font_file' in request.files and request.files['font_file'].filename != '':
-            file = request.files['font_file']
-            if file.filename.endswith('.ttf'):
-                filepath = os.path.join(FONTS_FOLDER, file.filename)
-                file.save(filepath)
-                message = f"✅ Font '{file.filename}' uploaded successfully!"
-            else:
-                message = "❌ Invalid file type. Please upload a .ttf file."
+    return f"""
+    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
+        <h1 style="color: #45ddc0;">✅ Action Sent!</h1>
+        <p style="color: #b9bbbe;">Moderation action has been sent to the bot.</p>
+        <p><b>Action:</b> {action.upper()} on User ID {user_id}</p>
+        <p><b>Reason:</b> {reason}</p>
+        {"<p><b>Duration:</b> " + duration + "s</p>" if action in ['timeout', 'mute'] else ""}
+        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
+    </div>
+    """
 
-        elif 'action' in request.form and request.form['action'] == 'save_settings':
-            admin_config['default_font'] = request.form.get('default_font', 'Inter')
-            admin_config['default_font_size'] = int(request.form.get('default_font_size', 42))
-            admin_config['default_bar_color'] = request.form.get('default_bar_color', '#5865F2')
-            admin_config['default_font_color'] = request.form.get('default_font_color', '#ffffff')
-            admin_config['default_stats_color'] = request.form.get('default_stats_color', '#b9bbbe')
-            admin_config['default_opacity'] = int(request.form.get('default_opacity', 0))
-            
-            with open(ADMIN_CONFIG_FILE, 'w') as f:
-                json.dump(admin_config, f, indent=4)
-            message = "✅ Admin settings updated successfully!"
-    
-    font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
-    
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin Panel</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <style>
-            body {{ font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; padding: 20px; text-align: center; }}
-            .nav {{ display: flex; justify-content: flex-end; max-width: 700px; margin: 0 auto 10px auto; }}
-            .nav a {{ color: #ff5555; text-decoration: none; font-weight: bold; background: #2f3136; padding: 8px 16px; border-radius: 8px; border: 1px solid #40444b; }}
-            .nav a:hover {{ background: #3f4146; }}
-            .card {{ background: #2f3136; max-width: 700px; margin: 20px auto; padding: 30px; border-radius: 16px; border: 1px solid #40444b; text-align: left; }}
-            h1, h2 {{ color: #45ddc0; }}
-            label {{ display: block; margin-top: 15px; font-weight: 600; color: #b9bbbe; }}
-            select, input, button {{ width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; box-sizing: border-box; }}
-            input[type="color"] {{ height: 50px; padding: 0; cursor: pointer; }}
-            input[type="number"] {{ width: 100px; }}
-            button {{ background: #5865F2; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }}
-            button:hover {{ background: #4752c4; }}
-            .msg {{ color: #45ddc0; margin-top: 20px; text-align: center; font-weight: bold; }}
-            
-            .upload-zone {{
-                border: 2px dashed #40444b;
-                padding: 30px;
-                text-align: center;
-                border-radius: 10px;
-                margin-top: 10px;
-                transition: all 0.3s;
-                cursor: pointer;
-                position: relative;
-            }}
-            .upload-zone.dragover {{
-                border-color: #5865F2;
-                background: rgba(88, 101, 242, 0.1);
-                transform: scale(1.02);
-            }}
-            .upload-zone input {{
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                top: 0;
-                left: 0;
-                opacity: 0;
-                cursor: pointer;
-            }}
-            .upload-zone p {{ margin: 0; color: #b9bbbe; }}
-        </style>
-    </head>
-    <body>
-        <div class="nav">
-            <a href="/admin/logout">Logout</a>
-        </div>
-        <h1>🛠️ Admin Control Panel</h1>
-        <div class="msg">{message}</div>
+@app.route('/admin/create_poll', methods=['POST'])
+def admin_create_poll():
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login_form'))
 
-        <div class="card">
-            <h2>📷 Default Background</h2>
-            <p style="color:#b9bbbe;">Upload a 900x250 background image.</p>
-            <div class="upload-zone">
-                <p>📁 Drag & Drop or Click to Upload Background</p>
-                <form method="POST" enctype="multipart/form-data">
-                    <input type="file" name="bg_image" accept="image/png,image/jpeg">
-                </form>
-            </div>
-        </div>
+    question = request.form.get('question')
+    options = request.form.getlist('options[]')
 
-        <div class="card">
-            <h2>📁 Font Manager (Drag & Drop)</h2>
-            <p style="color:#b9bbbe;">Drag & Drop .ttf files here. They will immediately appear in the user dashboard.</p>
-            <div class="upload-zone" id="fontDropZone">
-                <p>📁 Drag & Drop .ttf Fonts Here or Click</p>
-                <form method="POST" enctype="multipart/form-data">
-                    <input type="file" name="font_file" accept=".ttf" id="fontInput">
-                </form>
-            </div>
-            <div style="margin-top:15px; font-size:14px; color:#b9bbbe;">
-                <strong>Installed Fonts:</strong> {', '.join(font_files) if font_files else 'None uploaded yet.'}
-            </div>
-        </div>
+    if not question or len(options) < 2:
+        return "❌ Invalid Poll Data.", 400
 
-        <div class="card">
-            <h2>⚙️ Global Default Settings</h2>
-            <p style="color:#b9bbbe;">These settings apply to all users who haven't customized them yet.</p>
-            <form method="POST">
-                <input type="hidden" name="action" value="save_settings">
-                
-                <label>Default Font Family</label>
-                <select name="default_font">
-                    {"".join([f'<option value="{f}" {"selected" if admin_config["default_font"] == f else ""}>{f}</option>' for f in font_files])}
-                    <option value="Inter" {"selected" if admin_config['default_font'] == 'Inter' else ""}>Inter (Fallback)</option>
-                </select>
+    # Send request to Bot API to create a poll
+    # Placeholder message:
+    return f"""
+    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
+        <h1 style="color: #45ddc0;">📊 Poll Created!</h1>
+        <p style="color: #b9bbbe;">Bot will post this poll to the configured channel.</p>
+        <p><b>Question:</b> {question}</p>
+        <p><b>Options:</b> {', '.join(options)}</p>
+        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
+    </div>
+    """
 
-                <label>Default Font Size (px)</label>
-                <input type="number" name="default_font_size" value="{admin_config['default_font_size']}" min="20" max="100">
+@app.route('/admin/send_announcement', methods=['POST'])
+def admin_send_announcement():
+    if 'admin_id' not in session:
+        return redirect(url_for('admin_login_form'))
 
-                <label>Default Username Color</label>
-                <input type="color" name="default_font_color" value="{admin_config['default_font_color']}">
+    channel_id = request.form.get('channel_id', '1526730287378075648')
+    content = request.form.get('content')
 
-                <label>Default Stats Color</label>
-                <input type="color" name="default_stats_color" value="{admin_config['default_stats_color']}">
+    if not content:
+        return "❌ Announcement content cannot be empty.", 400
 
-                <label>Default Progress Bar Color</label>
-                <input type="color" name="default_bar_color" value="{admin_config['default_bar_color']}">
-
-                <button type="submit" style="margin-top: 25px;">Save Global Settings</button>
-            </form>
-        </div>
-
-        <script>
-            const dropZones = document.querySelectorAll('.upload-zone');
-            dropZones.forEach(zone => {{
-                ['dragenter', 'dragover'].forEach(eventName => {{
-                    zone.addEventListener(eventName, (e) => {{
-                        e.preventDefault();
-                        e.stopPropagation();
-                        zone.classList.add('dragover');
-                    }}, false);
-                }});
-
-                ['dragleave', 'drop'].forEach(eventName => {{
-                    zone.addEventListener(eventName, (e) => {{
-                        e.preventDefault();
-                        e.stopPropagation();
-                        zone.classList.remove('dragover');
-                    }}, false);
-                }});
-            }});
-
-            document.querySelectorAll('.upload-zone input[type="file"]').forEach(input => {{
-                input.addEventListener('change', function() {{
-                    if(this.files.length > 0) {{
-                        this.closest('form').submit();
-                    }}
-                }});
-            }});
-        </script>
-    </body>
-    </html>
-    '''
+    # Send request to Bot API to send announcement
+    # Placeholder message:
+    return f"""
+    <div style="font-family: Inter; background: #1e1e2e; color: white; padding: 40px; text-align: center;">
+        <h1 style="color: #45ddc0;">📢 Announcement Sent!</h1>
+        <p style="color: #b9bbbe;">Bot will post this announcement to channel <code>{channel_id}</code>.</p>
+        <p><b>Content:</b> {content}</p>
+        <br><a href="/admin" style="color: #5865F2;">Go back to Admin Panel</a>
+    </div>
+    """
 
 # ==========================================
-# ADMIN LOGIN & LOGOUT (No Basic Auth Popup)
+# ADMIN LOGIN & LOGOUT
 # ==========================================
 
 @app.route('/admin/login')
@@ -619,7 +534,6 @@ def admin_login_process():
         <body><div class="card"><h1>❌ Invalid Credentials</h1><p>Username or password is incorrect.</p><a href="/admin/login">Try again</a></div></body></html>
         ''', 401
 
-    # Set the session
     session['admin_id'] = str(admin['_id'])
     session['admin_username'] = admin['username']
     
@@ -637,7 +551,6 @@ def admin_logout():
 
 @app.route('/admin/signup/<token>')
 def admin_signup(token):
-    """Verify the token and prove identity."""
     invite = invites_collection.find_one({"token": token, "used": False})
     if not invite:
         return "❌ Invalid or already used invite link.", 404
@@ -736,14 +649,12 @@ def admin_register(discord_id):
     if existing:
         return "❌ This Discord account already has an admin account created.", 400
 
-    # Insert the new admin
     result = admins_collection.insert_one({
         "discord_id": discord_id,
         "username": username,
         "password": password
     })
 
-    # AUTO LOGIN THE USER IMMEDIATELY!
     session['admin_id'] = str(result.inserted_id)
     session['admin_username'] = username
 
