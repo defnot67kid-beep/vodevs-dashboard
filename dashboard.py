@@ -345,16 +345,15 @@ def web_leaderboard(server_id):
             level = get_level_from_xp(xp)
             xp_formatted = format_xp(xp)
             
-            # === PULL DATA DIRECTLY FROM THE DATABASE ===
             username = doc.get("username", f"User {user_id[:4]}")
             
             avatar_hash = doc.get("avatar_hash")
             if avatar_hash:
                 # =========================================================
-                # THE FIX: FORCE .png INSTEAD OF .gif FOR 100% COMPATIBILITY
+                # THE FIX: SUPPORT ANIMATED GIFs
                 # =========================================================
-                # Even if the hash starts with "a_", we force .png so it always loads.
-                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=256"
+                ext = "gif" if avatar_hash.startswith("a_") else "png"
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{ext}?size=256"
             else:
                 default_avatar_id = (int(user_id) >> 22) % 6
                 avatar_url = f"https://cdn.discordapp.com/embed/avatars/{default_avatar_id}.png"
@@ -365,7 +364,8 @@ def web_leaderboard(server_id):
                 "level": level,
                 "xp_formatted": xp_formatted,
                 "messages": "0",
-                "voice_time": "-"
+                "voice_time": "-",
+                "is_animated": avatar_hash.startswith("a_") if avatar_hash else False
             })
             
         if not has_data:
