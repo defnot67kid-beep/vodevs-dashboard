@@ -388,17 +388,17 @@ def admin_panel():
         return redirect(url_for('admin_logout'))
 
     # FETCH REAL DATA FROM MONGODB CACHE
-    # REPLACE THIS WITH YOUR ACTUAL GUILD ID (1526703518818373743)
-    guild_id = "1526703518818373743" 
+    # HARDCODED TO YOUR SPECIFIC GUILD ID SO IT NEVER FAILS AGAIN
+    MY_GUILD_ID = "1526703518818373743"
     
-    cached_data = user_cache_collection.find_one({"guild_id": guild_id})
+    cached_data = user_cache_collection.find_one({"guild_id": MY_GUILD_ID})
     members = cached_data["members"] if cached_data and "members" in cached_data else []
 
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
                            total_members=len(members),
                            members=members,
-                           guild_id=guild_id)
+                           guild_id=MY_GUILD_ID) # passing the REAL ID to HTML so JS uses it
 
 # ==========================================
 # QUEUE ACTIONS TO MONGODB
@@ -410,7 +410,8 @@ def api_create_poll():
 
     data = request.get_json()
     data['type'] = 'poll'
-    data['guild_id'] = data.get('guild_id')
+    # Force the correct guild ID here, ignoring what the HTML sends
+    data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
@@ -426,6 +427,8 @@ def api_mod_action():
 
     data = request.get_json()
     data['type'] = 'mod_action'
+    # Force the correct guild ID here
+    data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
@@ -441,6 +444,8 @@ def api_send_announcement():
 
     data = request.get_json()
     data['type'] = 'announcement'
+    # Force the correct guild ID here
+    data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
@@ -450,15 +455,14 @@ def api_send_announcement():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ==========================================
-# ADDED THE MISSING REACTION ROLE ENDPOINT
-# ==========================================
 @app.route('/api/admin/create_reaction_role', methods=['POST'])
 def api_create_reaction_role():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
 
     data = request.get_json()
     data['type'] = 'reaction_role'
+    # Force the correct guild ID here
+    data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
