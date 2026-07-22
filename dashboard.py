@@ -420,7 +420,7 @@ def admin_panel():
     # ============================================================
     # 🚨 IMPORTANT: PASTE YOUR ACTUAL DISCORD SERVER ID BELOW 🚨
     # ============================================================
-    guild_id = "YOUR_GUILD_ID_HERE" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
+    guild_id = "1526703518818373743" # <--- REPLACE THIS WITH YOUR ACTUAL DISCORD GUILD ID
 
     return render_template('admindashboard.html', 
                            admin_username=admin['username'],
