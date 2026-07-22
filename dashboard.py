@@ -37,6 +37,7 @@ else:
     client = pymongo.MongoClient(MONGO_URI)
     db = client["vodevs_bot_data"]
     levels_collection = db["levels"]
+    invites_collection = db["invites"]
     configs_collection = db["config"]
 
 # ==========================================
