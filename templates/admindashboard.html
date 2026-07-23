@@ -18,7 +18,6 @@
         .card { background: #1e1e2e; border: 1px solid #2f3136; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid #2f3136; padding-bottom: 10px; }
         
-        /* Inputs and buttons */
         .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; margin-bottom: 15px; }
         .search-bar:focus { border-color: #5865F2; }
         .user-row { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-bottom: 1px solid #26262e; }
@@ -52,7 +51,6 @@
         .status-dnd { background: #ed4245; color: white; }
         .status-offline { background: #4f545c; color: white; }
         
-        /* Modal */
         #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
         #modal-box { background: #1e1e2e; padding: 30px; border-radius: 12px; border: 1px solid #2f3136; width: 400px; max-width: 90%; }
         #modal-box h2 { color: #45ddc0; margin-bottom: 15px; }
@@ -72,7 +70,6 @@
 
         <div class="admin-grid">
             <div class="left-sidebar">
-
                 <!-- 1. UNBAN TOOL -->
                 <div class="card">
                     <div class="card-title">🔓 Unban User by ID</div>
@@ -203,7 +200,6 @@
     <script>
         const GUILD_ID = "{{ guild_id }}"; 
 
-        // FILTER USERS
         function filterUsers() {
             const input = document.getElementById('userSearchInput');
             const filter = input.value.toLowerCase();
@@ -215,6 +211,18 @@
             });
         }
 
+        // HELPER: SAFELY PARSE JSON
+        async function safeFetch(url, options) {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error("Server returned HTML instead of JSON:", text.substring(0, 200));
+                throw new Error("Server error. Check your Channel ID or Bot Logs.");
+            }
+        }
+
         // UNBAN
         async function submitUnban(event) {
             event.preventDefault();
@@ -223,14 +231,24 @@
             if(!userId) { alert("❌ Please provide a User ID."); return; }
 
             try {
-                const response = await fetch('/api/admin/mod_action', {
+                const result = await safeFetch('/api/admin/mod_action', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, action: 'unban', reason: reason })
+                    body: JSON.stringify({ 
+                        guild_id: GUILD_ID, 
+                        user_id: userId, 
+                        action: 'unban', // This MUST be sent
+                        reason: reason 
+                    })
                 });
-                const result = await response.json();
-                if(result.status === 'success') { alert(`✅ Unban queued for bot!`); document.getElementById('unbanForm').reset(); }
-                else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+                if(result.status === 'success') { 
+                    alert(`✅ Unban queued for bot!`); 
+                    document.getElementById('unbanForm').reset(); 
+                } else { 
+                    alert(`❌ Error: ${result.message}`); 
+                }
+            } catch (e) { 
+                alert(`❌ Failed: ${e.message}`); 
+            }
         }
 
         // CREATE REACTION ROLE MENU
@@ -238,19 +256,25 @@
             event.preventDefault();
             const btn = document.getElementById('rrSubmitBtn'); const resultDiv = document.getElementById('rrResult');
             btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
-            const channelId = document.getElementById('rr_channel_id').value; const title = document.getElementById('rr_title').value;
-            const description = document.getElementById('rr_description').value; const color = document.getElementById('rr_color').value;
+            
+            const channelId = document.getElementById('rr_channel_id').value; 
+            const title = document.getElementById('rr_title').value;
+            const description = document.getElementById('rr_description').value; 
+            const color = document.getElementById('rr_color').value;
+
+            if(!channelId) { resultDiv.innerText = "❌ Please enter a valid Channel ID."; btn.disabled=false; return; }
 
             try {
-                const response = await fetch('/api/admin/create_reaction_role', {
+                const result = await safeFetch('/api/admin/create_reaction_role', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles: [] })
                 });
-                const data = await response.json();
-                if(response.ok) {
-                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Menu Created! Msg ID: ${data.message_id}`;
-                } else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`; }
-            } catch (e) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`; }
+                if(result.status === 'success') {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Menu Created! Msg ID: ${result.message_id}`;
+                } else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`; }
+            } catch (e) { 
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${e.message}`; 
+            }
             finally { btn.disabled = false; btn.innerText = "Create Empty Menu"; }
         }
 
@@ -264,14 +288,13 @@
             if(!msgId || !emoji || !roleId) { alert("❌ Msg ID, Emoji, and Role ID are required."); return; }
 
             try {
-                const response = await fetch('/api/admin/add_reaction_role', {
+                const result = await safeFetch('/api/admin/add_reaction_role', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: GUILD_ID, message_id: msgId, emoji, role_id: parseInt(roleId), description: desc })
                 });
-                const result = await response.json();
                 if(result.status === 'success') { alert(`✅ Role added to menu!`); document.getElementById('rrAddForm').reset(); }
                 else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+            } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
         // POLLS
@@ -285,17 +308,16 @@
             if(options.length < 2) { alert("❌ Please provide at least 2 options."); return; }
             if(!channelId) { alert("❌ Channel ID is required."); return; }
             try {
-                const response = await fetch('/api/admin/create_poll', {
+                const result = await safeFetch('/api/admin/create_poll', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: GUILD_ID, channel_id: channelId, question, options, duration, poll_type })
                 });
-                const result = await response.json();
-                if(response.ok) { alert(`✅ Poll queued for bot!`); document.getElementById('pollForm').reset(); document.getElementById('poll-options-container').innerHTML = `
+                if(result.status === 'success') { alert(`✅ Poll queued for bot!`); document.getElementById('pollForm').reset(); document.getElementById('poll-options-container').innerHTML = `
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
                     `; }
                 else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+            } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
         // ANNOUNCEMENTS
@@ -304,14 +326,13 @@
             const channelId = document.getElementById('announce_channel').value; const content = document.getElementById('announce_content').value;
             if(!content.trim()) { alert("❌ Announcement content cannot be empty."); return; }
             try {
-                const response = await fetch('/api/admin/send_announcement', {
+                const result = await safeFetch('/api/admin/send_announcement', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: GUILD_ID, channel_id: channelId, content })
                 });
-                const result = await response.json();
-                if(response.ok) { alert(`✅ Announcement sent!`); document.getElementById('announcementForm').reset(); }
+                if(result.status === 'success') { alert(`✅ Announcement sent!`); document.getElementById('announcementForm').reset(); }
                 else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+            } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
         // MODERATION MODAL
@@ -331,13 +352,13 @@
             const formData = new FormData(this); const data = Object.fromEntries(formData.entries());
             data.guild_id = GUILD_ID;
             try {
-                const response = await fetch('/api/admin/mod_action', {
+                const result = await safeFetch('/api/admin/mod_action', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
                 });
-                const result = await response.json(); closeModal();
+                closeModal();
                 if(result.status === 'success') { const actionName = result.action ? result.action.toUpperCase() : 'Action'; alert(`✅ ${actionName} executed successfully!`); }
                 else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to contact bot: ${e}`); }
+            } catch (e) { alert(`❌ Failed: ${e.message}`); }
             finally { btn.disabled = false; btn.innerText = "Execute Action"; }
         });
 
