@@ -17,6 +17,8 @@
         @media (max-width: 1000px) { .admin-grid { grid-template-columns: 1fr; } }
         .card { background: #1e1e2e; border: 1px solid #2f3136; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid #2f3136; padding-bottom: 10px; }
+        
+        /* Inputs and buttons */
         .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; margin-bottom: 15px; }
         .search-bar:focus { border-color: #5865F2; }
         .user-row { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-bottom: 1px solid #26262e; }
@@ -32,6 +34,10 @@
         .btn-unban { background: #3ba55c; }
         .btn-primary { background: #5865F2; width: 100%; padding: 10px; margin-top: 10px; }
         .btn-primary:hover { background: #4752c4; }
+        .btn-success { background: #3ba55c; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-success:hover { background: #2e884a; }
+        .btn-warning { background: #faa61a; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-warning:hover { background: #d68b10; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; color: #b9bbbe; font-size: 14px; margin-bottom: 5px; }
         .form-control { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; outline: none; }
@@ -45,6 +51,8 @@
         .status-idle { background: #faa61a; color: white; }
         .status-dnd { background: #ed4245; color: white; }
         .status-offline { background: #4f545c; color: white; }
+        
+        /* Modal */
         #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
         #modal-box { background: #1e1e2e; padding: 30px; border-radius: 12px; border: 1px solid #2f3136; width: 400px; max-width: 90%; }
         #modal-box h2 { color: #45ddc0; margin-bottom: 15px; }
@@ -64,11 +72,29 @@
 
         <div class="admin-grid">
             <div class="left-sidebar">
+
+                <!-- 1. UNBAN TOOL -->
+                <div class="card">
+                    <div class="card-title">🔓 Unban User by ID</div>
+                    <form id="unbanForm" onsubmit="submitUnban(event)">
+                        <div class="form-group">
+                            <label>User ID</label>
+                            <input type="text" id="unban_user_id" class="form-control" required placeholder="123456789012345678">
+                        </div>
+                        <div class="form-group">
+                            <label>Reason</label>
+                            <input type="text" id="unban_reason" class="form-control" placeholder="Unban reason...">
+                        </div>
+                        <button type="submit" class="btn btn-success">Unban User</button>
+                    </form>
+                </div>
+
+                <!-- 2. CREATE POLL -->
                 <div class="card">
                     <div class="card-title">📊 Create Poll</div>
                     <form id="pollForm" onsubmit="submitPoll(event)">
                         <div class="form-group">
-                            <label>Channel ID (Leave blank for Global <code>1526730287378075648</code>)</label>
+                            <label>Channel ID</label>
                             <input type="text" name="channel_id" id="poll_channel" class="form-control" placeholder="123456789012345678">
                         </div>
                         <div class="form-group">
@@ -84,53 +110,56 @@
                             <button type="button" class="add-option-btn" onclick="addPollOption()">+ Add Option</button>
                         </div>
                         <div class="form-group">
-                            <label>Duration (e.g. 15m, 1h)</label>
+                            <label>Duration</label>
                             <input type="text" name="duration" id="poll_duration" class="form-control" value="15m" required>
                         </div>
                         <div class="form-group">
-                            <label>Type (single or multiple)</label>
+                            <label>Type</label>
                             <input type="text" name="poll_type" id="poll_type" class="form-control" value="single" required>
                         </div>
-                        
-                        <div style="display: flex; gap: 10px; margin-top: 15px;">
-                            <button type="submit" class="btn btn-primary" style="flex: 1;">Create Poll</button>
-                            <button type="button" class="btn btn-primary" style="flex: 1; background: #faa61a;" onclick="submitGlobalPoll(event)">🌐 Create Global Poll</button>
-                        </div>
+                        <button type="submit" class="btn btn-primary">Create Poll</button>
                     </form>
                 </div>
 
+                <!-- 3. GLOBAL ANNOUNCEMENT -->
                 <div class="card">
                     <div class="card-title">📢 Global Announcement</div>
                     <form id="announcementForm" onsubmit="submitAnnouncement(event)">
-                        <div class="form-group"><label>Channel ID (Optional)</label><input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648"></div>
+                        <div class="form-group"><label>Channel ID</label><input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648"></div>
                         <div class="form-group"><label>Message Content</label><textarea name="content" id="announce_content" class="form-control" required></textarea></div>
                         <button type="submit" class="btn btn-primary">Send Announcement</button>
                     </form>
                 </div>
 
+                <!-- 4. REACTION ROLES (STEP 1: CREATE MENU) -->
                 <div class="card">
-                    <div class="card-title">🔘 Create Reaction Role Menu</div>
-                    <form id="rrForm" onsubmit="createReactionRole(event)">
+                    <div class="card-title">🔘 Step 1: Create Role Menu</div>
+                    <form id="rrCreateForm" onsubmit="createReactionRole(event)">
                         <div class="form-group"><label>Channel ID</label><input type="text" id="rr_channel_id" class="form-control" required></div>
                         <div class="form-group"><label>Title</label><input type="text" id="rr_title" class="form-control" required></div>
                         <div class="form-group"><label>Description</label><textarea id="rr_description" class="form-control"></textarea></div>
                         <div class="form-group"><label>Embed Color</label><input type="color" id="rr_color" class="form-control" value="#5865F2"></div>
-                        <div class="card-title" style="margin-top: 15px; border-top: 1px solid #26262e; padding-top: 15px;">Add Roles</div>
-                        <div id="rr_roles_container">
-                            <div class="rr-role-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
-                                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" required></div>
-                                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" required></div>
-                                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc"></div>
-                            </div>
-                        </div>
-                        <button type="button" class="add-option-btn" style="margin-bottom: 15px;" onclick="addRRRole()">+ Add Role</button>
-                        <button type="submit" class="btn btn-primary" id="rrSubmitBtn">Create Reaction Role Menu</button>
+                        <button type="submit" class="btn btn-success" id="rrSubmitBtn">Create Empty Menu</button>
                         <div id="rrResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
                     </form>
                 </div>
+
+                <!-- 5. REACTION ROLES (STEP 2: ADD TO MENU) -->
+                <div class="card">
+                    <div class="card-title">➕ Step 2: Add Role to Menu</div>
+                    <form id="rrAddForm" onsubmit="addReactionRole(event)">
+                        <div class="form-group"><label>Message ID</label><input type="text" id="rr_msg_id" class="form-control" required placeholder="ID of the menu message"></div>
+                        <div class="form-group"><label>Emoji</label><input type="text" id="rr_add_emoji" class="form-control" required placeholder="✅"></div>
+                        <div class="form-group"><label>Role ID</label><input type="text" id="rr_add_roleid" class="form-control" required placeholder="123456789"></div>
+                        <div class="form-group"><label>Description</label><input type="text" id="rr_add_desc" class="form-control" placeholder="Access to..."></div>
+                        <button type="submit" class="btn btn-warning">Add Role to Menu</button>
+                    </form>
+                </div>
+
             </div>
 
             <div class="right-content">
+                <!-- 6. MEMBER LIST -->
                 <div class="card">
                     <div class="card-title">👥 Server Members ({{ total_members }})</div>
                     <input type="text" id="userSearchInput" class="search-bar" placeholder="🔍 Search by username or ID..." onkeyup="filterUsers()">
@@ -145,7 +174,6 @@
                                 <button class="btn btn-mute" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'mute')">Mute</button>
                                 <button class="btn btn-kick" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'kick')">Kick</button>
                                 <button class="btn btn-ban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'ban')">Ban</button>
-                                <button class="btn btn-unban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'unban')">Unban</button>
                             </div>
                         </div>
                         {% endfor %}
@@ -155,6 +183,7 @@
         </div>
     </div>
 
+    <!-- MODAL -->
     <div id="modal-overlay">
         <div id="modal-box">
             <h2 id="modalTitle">Moderate User</h2>
@@ -173,6 +202,8 @@
 
     <script>
         const GUILD_ID = "{{ guild_id }}"; 
+
+        // FILTER USERS
         function filterUsers() {
             const input = document.getElementById('userSearchInput');
             const filter = input.value.toLowerCase();
@@ -184,98 +215,98 @@
             });
         }
 
+        // UNBAN
+        async function submitUnban(event) {
+            event.preventDefault();
+            const userId = document.getElementById('unban_user_id').value.trim();
+            const reason = document.getElementById('unban_reason').value.trim() || 'No reason provided.';
+            if(!userId) { alert("❌ Please provide a User ID."); return; }
+
+            try {
+                const response = await fetch('/api/admin/mod_action', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, action: 'unban', reason: reason })
+                });
+                const result = await response.json();
+                if(result.status === 'success') { alert(`✅ Unban queued for bot!`); document.getElementById('unbanForm').reset(); }
+                else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+        }
+
+        // CREATE REACTION ROLE MENU
         async function createReactionRole(event) {
             event.preventDefault();
             const btn = document.getElementById('rrSubmitBtn'); const resultDiv = document.getElementById('rrResult');
             btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
             const channelId = document.getElementById('rr_channel_id').value; const title = document.getElementById('rr_title').value;
             const description = document.getElementById('rr_description').value; const color = document.getElementById('rr_color').value;
-            const roleRows = document.querySelectorAll('.rr-role-row'); const roles = [];
-            roleRows.forEach(row => {
-                const emoji = row.querySelector('.rr-emoji').value; const roleId = row.querySelector('.rr-roleid').value;
-                const desc = row.querySelector('.rr-desc').value;
-                if(emoji && roleId) roles.push({ emoji, role_id: parseInt(roleId), description: desc });
-            });
-            if(roles.length === 0) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Please add at least one role."; btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; return; }
+
             try {
                 const response = await fetch('/api/admin/create_reaction_role', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles })
+                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles: [] })
                 });
                 const data = await response.json();
-                if(response.ok) { resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Created! Message ID: ${data.message_id}`; }
-                else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`; }
+                if(response.ok) {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Menu Created! Msg ID: ${data.message_id}`;
+                } else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`; }
             } catch (e) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`; }
-            finally { btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; }
+            finally { btn.disabled = false; btn.innerText = "Create Empty Menu"; }
         }
 
+        // ADD ROLE TO REACTION ROLE MENU
+        async function addReactionRole(event) {
+            event.preventDefault();
+            const msgId = document.getElementById('rr_msg_id').value.trim();
+            const emoji = document.getElementById('rr_add_emoji').value.trim();
+            const roleId = document.getElementById('rr_add_roleid').value.trim();
+            const desc = document.getElementById('rr_add_desc').value.trim() || 'No description.';
+            if(!msgId || !emoji || !roleId) { alert("❌ Msg ID, Emoji, and Role ID are required."); return; }
+
+            try {
+                const response = await fetch('/api/admin/add_reaction_role', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, message_id: msgId, emoji, role_id: parseInt(roleId), description: desc })
+                });
+                const result = await response.json();
+                if(result.status === 'success') { alert(`✅ Role added to menu!`); document.getElementById('rrAddForm').reset(); }
+                else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+        }
+
+        // POLLS
         async function submitPoll(event) {
             event.preventDefault();
             const channelId = document.getElementById('poll_channel').value.trim();
-            const question = document.getElementById('poll_question').value;
-            const duration = document.getElementById('poll_duration').value;
+            const question = document.getElementById('poll_question').value; const duration = document.getElementById('poll_duration').value;
             const poll_type = document.getElementById('poll_type').value;
-            const optionsInputs = document.querySelectorAll('#poll-options-container input');
-            const options = [];
-            optionsInputs.forEach(input => {
-                if(input.value.trim() !== '') options.push(input.value.trim());
-            });
+            const optionsInputs = document.querySelectorAll('#poll-options-container input'); const options = [];
+            optionsInputs.forEach(input => { if(input.value.trim() !== '') options.push(input.value.trim()); });
             if(options.length < 2) { alert("❌ Please provide at least 2 options."); return; }
-            if(!channelId) { alert("❌ Please provide a Channel ID, or use the 'Create Global Poll' button."); return; }
-            const data = { guild_id: GUILD_ID, channel_id: channelId, question, options, duration, poll_type };
+            if(!channelId) { alert("❌ Channel ID is required."); return; }
             try {
                 const response = await fetch('/api/admin/create_poll', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: channelId, question, options, duration, poll_type })
                 });
                 const result = await response.json();
-                if(response.ok) {
-                    alert(`✅ Poll queued for bot!`);
-                    document.getElementById('pollForm').reset();
-                    document.getElementById('poll-options-container').innerHTML = `
+                if(response.ok) { alert(`✅ Poll queued for bot!`); document.getElementById('pollForm').reset(); document.getElementById('poll-options-container').innerHTML = `
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
                         <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
-                    `;
-                } else { alert(`❌ Error: ${result.message}`); }
+                    `; }
+                else { alert(`❌ Error: ${result.message}`); }
             } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
         }
 
-        async function submitGlobalPoll(event) {
-            event.preventDefault();
-            const question = document.getElementById('poll_question').value;
-            const duration = document.getElementById('poll_duration').value;
-            const poll_type = document.getElementById('poll_type').value;
-            const optionsInputs = document.querySelectorAll('#poll-options-container input');
-            const options = [];
-            optionsInputs.forEach(input => {
-                if(input.value.trim() !== '') options.push(input.value.trim());
-            });
-            if(options.length < 2) { alert("❌ Please provide at least 2 options."); return; }
-            const globalChannelId = "1526730287378075648";
-            const data = { guild_id: GUILD_ID, channel_id: globalChannelId, question, options, duration, poll_type };
-            try {
-                const response = await fetch('/api/admin/create_poll', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-                });
-                const result = await response.json();
-                if(response.ok) {
-                    alert(`✅ Global Poll queued for channel <#${globalChannelId}>!`);
-                    document.getElementById('pollForm').reset();
-                    document.getElementById('poll-options-container').innerHTML = `
-                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
-                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
-                    `;
-                } else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
-        }
-
+        // ANNOUNCEMENTS
         async function submitAnnouncement(event) {
             event.preventDefault();
             const channelId = document.getElementById('announce_channel').value; const content = document.getElementById('announce_content').value;
             if(!content.trim()) { alert("❌ Announcement content cannot be empty."); return; }
-            const data = { guild_id: GUILD_ID, channel_id: channelId, content };
             try {
                 const response = await fetch('/api/admin/send_announcement', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: channelId, content })
                 });
                 const result = await response.json();
                 if(response.ok) { alert(`✅ Announcement sent!`); document.getElementById('announcementForm').reset(); }
@@ -283,18 +314,17 @@
             } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
         }
 
+        // MODERATION MODAL
         function openModal(userId, userName, action) {
             document.getElementById('modal-overlay').style.display = 'flex';
             document.getElementById('modalUserId').value = userId; document.getElementById('modalAction').value = action;
             document.getElementById('modalTitle').innerText = `${action.toUpperCase()} - ${userName}`;
             const durationGroup = document.getElementById('durationGroup');
-            if (action === 'kick' || action === 'ban' || action === 'unban') durationGroup.style.display = 'none';
+            if (action === 'kick' || action === 'ban') durationGroup.style.display = 'none';
             else durationGroup.style.display = 'block';
         }
-
         function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
         document.getElementById('modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
-
         document.getElementById('modalForm').addEventListener('submit', async function(e) {
             e.preventDefault(); const btn = document.querySelector('#modalForm .btn-primary');
             btn.disabled = true; btn.innerText = "Executing...";
@@ -315,15 +345,6 @@
             const container = document.getElementById('poll-options-container');
             const count = container.children.length + 1; const div = document.createElement('div');
             div.className = 'poll-option'; div.innerHTML = `<input type="text" name="options[]" class="form-control" placeholder="Option ${count}" required>`;
-            container.appendChild(div);
-        }
-
-        function addRRRole() {
-            const container = document.getElementById('rr_roles_container'); const div = document.createElement('div');
-            div.className = 'rr-role-row'; div.style = "display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;";
-            div.innerHTML = `<div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" required></div>
-                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" required></div>
-                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc"></div>`;
             container.appendChild(div);
         }
     </script>
