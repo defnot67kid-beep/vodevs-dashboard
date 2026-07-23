@@ -30,7 +30,7 @@
         .btn-mute { background: #5865F2; }
         .btn-timeout { background: #ed4245; }
         .btn-ban { background: #ed4245; }
-        .btn-unban { background: #3ba55c; }
+        .btn-warn { background: #faa61a; } /* New Warn Button Color */
         .btn-primary { background: #5865F2; width: 100%; padding: 10px; margin-top: 10px; }
         .btn-primary:hover { background: #4752c4; }
         .btn-success { background: #3ba55c; width: 100%; padding: 10px; margin-top: 10px; }
@@ -171,6 +171,7 @@
                                 <button class="btn btn-mute" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'mute')">Mute</button>
                                 <button class="btn btn-kick" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'kick')">Kick</button>
                                 <button class="btn btn-ban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'ban')">Ban</button>
+                                <button class="btn btn-warn" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'warn')">Warn</button>
                             </div>
                         </div>
                         {% endfor %}
@@ -236,7 +237,7 @@
                     body: JSON.stringify({ 
                         guild_id: GUILD_ID, 
                         user_id: userId, 
-                        action: 'unban', // This MUST be sent
+                        action: 'unban', 
                         reason: reason 
                     })
                 });
@@ -341,7 +342,7 @@
             document.getElementById('modalUserId').value = userId; document.getElementById('modalAction').value = action;
             document.getElementById('modalTitle').innerText = `${action.toUpperCase()} - ${userName}`;
             const durationGroup = document.getElementById('durationGroup');
-            if (action === 'kick' || action === 'ban') durationGroup.style.display = 'none';
+            if (action === 'kick' || action === 'ban' || action === 'warn') durationGroup.style.display = 'none';
             else durationGroup.style.display = 'block';
         }
         function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
