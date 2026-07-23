@@ -43,6 +43,14 @@
         .channel-name { font-weight: 500; }
         .channel-type { font-size: 11px; background: #2f3136; padding: 2px 6px; border-radius: 4px; color: #b9bbbe; }
 
+        /* NEW: Config Form Styles */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; color: #b9bbbe; font-size: 14px; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; outline: none; font-family: inherit; }
+        .form-control:focus { border-color: #5865F2; }
+        .btn-primary { background: #5865F2; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.2s; }
+        .btn-primary:hover { background: #4752c4; transform: scale(1.02); }
+
         @media (max-width: 1000px) { .grid-2col { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -51,6 +59,19 @@
         <div class="header">
             <h1>🛡️ Bot Owner Command Center</h1>
             <span style="color: #b9bbbe;">Logged in as Owner</span>
+        </div>
+
+        <!-- Owner Settings Block -->
+        <div class="card" style="margin-bottom: 30px;">
+            <div class="card-header">⚙️ Server Configurations</div>
+            <form id="configForm" onsubmit="saveConfig(event)">
+                <div class="form-group">
+                    <label>Warn Log Channel ID</label>
+                    <input type="text" id="config_warn_channel" class="form-control" required placeholder="123456789012345678">
+                </div>
+                <button type="submit" class="btn-primary">Save Configuration</button>
+                <div id="configResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
+            </form>
         </div>
 
         <div class="stats-grid">
@@ -115,5 +136,37 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // ------------------------------------------
+        // SAVE SERVER CONFIG
+        // ------------------------------------------
+        async function saveConfig(event) {
+            event.preventDefault();
+            const resultDiv = document.getElementById('configResult');
+            const btn = document.querySelector('#configForm .btn-primary');
+            btn.disabled = true; btn.innerText = "Saving..."; resultDiv.innerText = "";
+
+            const warnChannel = document.getElementById('config_warn_channel').value.trim();
+            if(!warnChannel) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Channel ID is required."; btn.disabled=false; return; }
+
+            try {
+                const response = await fetch('/api/admin/save_config', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ warn_channel_id: warnChannel })
+                });
+                const result = await response.json();
+                if(result.status === 'success') {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Config Saved! Channel updated.`;
+                } else {
+                    resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`;
+                }
+            } catch (e) {
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`;
+            } finally {
+                btn.disabled = false; btn.innerText = "Save Configuration";
+            }
+        }
+    </script>
 </body>
 </html>
