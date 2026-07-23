@@ -475,6 +475,22 @@ def api_create_reaction_role():
         return jsonify({"status": "success", "message": "Reaction Role queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+        
+@app.route('/api/admin/save_config', methods=['POST'])
+def api_save_config():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['guild_id'] = "1526703518818373743"
+    data['type'] = 'save_config'
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Config queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admin/add_reaction_role', methods=['POST'])
 def api_add_reaction_role():
