@@ -1,349 +1,331 @@
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, flash
-from flask_basicauth import BasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
-import pymongo
-import os
-import json
-import io
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-import requests
-import traceback
-from bson.objectid import ObjectId
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Server Panel</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #12121a; color: #e2e2e2; padding: 30px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #2f3136; padding-bottom: 20px; }
+        .header h1 { color: #45ddc0; display: flex; align-items: center; gap: 10px; }
+        .nav a { color: #ff5555; text-decoration: none; font-weight: bold; background: #2f3136; padding: 8px 16px; border-radius: 8px; border: 1px solid #40444b; }
+        .nav a:hover { background: #3f4146; }
+        .admin-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; }
+        @media (max-width: 1000px) { .admin-grid { grid-template-columns: 1fr; } }
+        .card { background: #1e1e2e; border: 1px solid #2f3136; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid #2f3136; padding-bottom: 10px; }
+        .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; margin-bottom: 15px; }
+        .search-bar:focus { border-color: #5865F2; }
+        .user-row { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-bottom: 1px solid #26262e; }
+        .user-row:last-child { border-bottom: none; }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; }
+        .user-name { font-weight: 600; flex: 1; color: white; }
+        .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn { padding: 6px 12px; border: none; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; color: white; transition: 0.2s; text-decoration: none; display: inline-block;}
+        .btn-kick { background: #faa61a; }
+        .btn-mute { background: #5865F2; }
+        .btn-timeout { background: #ed4245; }
+        .btn-ban { background: #ed4245; }
+        .btn-unban { background: #3ba55c; }
+        .btn-primary { background: #5865F2; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-primary:hover { background: #4752c4; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; color: #b9bbbe; font-size: 14px; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; outline: none; }
+        .form-control:focus { border-color: #5865F2; }
+        textarea.form-control { resize: vertical; min-height: 80px; }
+        .poll-option { display: flex; gap: 10px; margin-bottom: 10px; }
+        .poll-option input { flex: 1; }
+        .add-option-btn { background: #2f3136; border: 1px dashed #b9bbbe; color: #b9bbbe; padding: 5px 15px; border-radius: 6px; cursor: pointer; width: 100%; }
+        .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; text-transform: capitalize; }
+        .status-online { background: #3ba55c; color: white; }
+        .status-idle { background: #faa61a; color: white; }
+        .status-dnd { background: #ed4245; color: white; }
+        .status-offline { background: #4f545c; color: white; }
+        #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
+        #modal-box { background: #1e1e2e; padding: 30px; border-radius: 12px; border: 1px solid #2f3136; width: 400px; max-width: 90%; }
+        #modal-box h2 { color: #45ddc0; margin-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 15px; justify-content: flex-end; }
+        .btn-cancel { background: #4f545c; padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛠️ Admin Server Panel</h1>
+            <div class="nav">
+                <span style="color: #b9bbbe; margin-right: 15px;">Logged in as {{ admin_username }}</span>
+                <a href="/admin/logout">Logout</a>
+            </div>
+        </div>
 
-app = Flask(__name__)
+        <div class="admin-grid">
+            <div class="left-sidebar">
+                <div class="card">
+                    <div class="card-title">📊 Create Poll</div>
+                    <form id="pollForm" onsubmit="submitPoll(event)">
+                        <div class="form-group">
+                            <label>Channel ID (Leave blank for Global <code>1526730287378075648</code>)</label>
+                            <input type="text" name="channel_id" id="poll_channel" class="form-control" placeholder="123456789012345678">
+                        </div>
+                        <div class="form-group">
+                            <label>Poll Question</label>
+                            <input type="text" name="question" id="poll_question" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Options</label>
+                            <div id="poll-options-container">
+                                <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
+                                <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
+                            </div>
+                            <button type="button" class="add-option-btn" onclick="addPollOption()">+ Add Option</button>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (e.g. 15m, 1h)</label>
+                            <input type="text" name="duration" id="poll_duration" class="form-control" value="15m" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Type (single or multiple)</label>
+                            <input type="text" name="poll_type" id="poll_type" class="form-control" value="single" required>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">Create Poll</button>
+                            <button type="button" class="btn btn-primary" style="flex: 1; background: #faa61a;" onclick="submitGlobalPoll(event)">🌐 Create Global Poll</button>
+                        </div>
+                    </form>
+                </div>
 
-# ==========================================
-# SESSION CONFIG (SECURE)
-# ==========================================
-app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", os.urandom(24).hex())
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_FILE_DIR'] = './flask_session/'
+                <div class="card">
+                    <div class="card-title">📢 Global Announcement</div>
+                    <form id="announcementForm" onsubmit="submitAnnouncement(event)">
+                        <div class="form-group"><label>Channel ID (Optional)</label><input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648"></div>
+                        <div class="form-group"><label>Message Content</label><textarea name="content" id="announce_content" class="form-control" required></textarea></div>
+                        <button type="submit" class="btn btn-primary">Send Announcement</button>
+                    </form>
+                </div>
 
-# ==========================================
-# DISCORD OAUTH2 SETUP
-# ==========================================
-CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
+                <div class="card">
+                    <div class="card-title">🔘 Create Reaction Role Menu</div>
+                    <form id="rrForm" onsubmit="createReactionRole(event)">
+                        <div class="form-group"><label>Channel ID</label><input type="text" id="rr_channel_id" class="form-control" required></div>
+                        <div class="form-group"><label>Title</label><input type="text" id="rr_title" class="form-control" required></div>
+                        <div class="form-group"><label>Description</label><textarea id="rr_description" class="form-control"></textarea></div>
+                        <div class="form-group"><label>Embed Color</label><input type="color" id="rr_color" class="form-control" value="#5865F2"></div>
+                        <div class="card-title" style="margin-top: 15px; border-top: 1px solid #26262e; padding-top: 15px;">Add Roles</div>
+                        <div id="rr_roles_container">
+                            <div class="rr-role-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                                <div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" required></div>
+                                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" required></div>
+                                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc"></div>
+                            </div>
+                        </div>
+                        <button type="button" class="add-option-btn" style="margin-bottom: 15px;" onclick="addRRRole()">+ Add Role</button>
+                        <button type="submit" class="btn btn-primary" id="rrSubmitBtn">Create Reaction Role Menu</button>
+                        <div id="rrResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
+                    </form>
+                </div>
+            </div>
 
-# ==========================================
-# MONGODB SETUP
-# ==========================================
-MONGO_URI = os.getenv("MONGO_URI")
-if not MONGO_URI:
-    print("⚠️ CRITICAL WARNING: MONGO_URI environment variable is missing!")
-else:
-    client = pymongo.MongoClient(MONGO_URI)
-    db = client["vodevs_bot_data"]
-    levels_collection = db["levels"]
-    invites_collection = db["admin_invites"]
-    admins_collection = db["admins"]
-    configs_collection = db["config"]
-    owner_secrets_collection = db["owner_secrets"]
-    user_cache_collection = db["user_cache"]
-    admin_actions_collection = db["admin_actions"]
+            <div class="right-content">
+                <div class="card">
+                    <div class="card-title">👥 Server Members ({{ total_members }})</div>
+                    <input type="text" id="userSearchInput" class="search-bar" placeholder="🔍 Search by username or ID..." onkeyup="filterUsers()">
+                    <div id="userListContainer">
+                        {% for user in members %}
+                        <div class="user-row" data-username="{{ user.name.lower() }}" data-id="{{ user.id }}">
+                            <img src="{{ user.avatar_url }}" class="user-avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+                            <span class="user-name">{{ user.name }}</span>
+                            <span class="status-badge status-{{ user.status }}">{{ user.status }}</span>
+                            <div class="user-actions">
+                                <button class="btn btn-timeout" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'timeout')">Timeout</button>
+                                <button class="btn btn-mute" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'mute')">Mute</button>
+                                <button class="btn btn-kick" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'kick')">Kick</button>
+                                <button class="btn btn-ban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'ban')">Ban</button>
+                                <button class="btn btn-unban" onclick="openModal('{{ user.id }}', '{{ user.name }}', 'unban')">Unban</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
-CONFIG_FILE = "rank_configs.json"
-ADMIN_CONFIG_FILE = "admin_config.json"
-DEFAULT_BG_FILE = "default_bg.png"
-USER_BG_FOLDER = "backgrounds/"
-FONTS_FOLDER = "fonts/"
-
-if not os.path.exists(USER_BG_FOLDER): os.makedirs(USER_BG_FOLDER)
-if not os.path.exists(FONTS_FOLDER): os.makedirs(FONTS_FOLDER)
-
-if os.path.exists(CONFIG_FILE): configs = json.load(open(CONFIG_FILE, 'r'))
-else: configs = {}
-
-if os.path.exists(ADMIN_CONFIG_FILE): admin_config = json.load(open(ADMIN_CONFIG_FILE, 'r'))
-else: admin_config = {"default_font": "Inter", "default_font_size": 48, "default_bar_color": "#5865F2", "default_font_color": "#ffffff", "default_stats_color": "#b9bbbe", "default_opacity": 0}
-
-@app.route('/'): return "✅ Rank Card Dashboard is online!"
-@app.route('/dashboard'): return redirect(url_for('login'))
-
-@app.route('/login')
-def login():
-    oauth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={DASHBOARD_URL}/authorize&response_type=code&scope=identify"
-    return redirect(oauth_url)
-
-@app.route('/authorize')
-def authorize():
-    code = request.args.get('code')
-    if not code: return "❌ No authorization code received.", 400
-    data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "grant_type": "authorization_code", "code": code, "redirect_uri": f"{DASHBOARD_URL}/authorize"}
-    try:
-        token_data = requests.post("https://discord.com/api/oauth2/token", data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}).json()
-        user_info = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token_data.get('access_token')}"}).json()
-        session['user_id'] = user_info['id']; session['discord_name'] = user_info.get('global_name', user_info['username'])
-        return redirect(url_for('dashboard', guild_id="0", user_id=user_info['id']))
-    except Exception as e: return f"❌ Login failed: {e}"
-
-@app.route('/dashboard/<guild_id>/<user_id>')
-def dashboard(guild_id, user_id):
-    if 'user_id' not in session: return redirect(url_for('login'))
-    if session['user_id'] != user_id: return redirect(url_for('dashboard', guild_id=guild_id, user_id=session['user_id']))
-    font_files = [f[:-4] for f in os.listdir(FONTS_FOLDER) if f.endswith('.ttf')]
-    if not font_files: font_files = ["Inter"]
-    config_key = f"{guild_id}_{user_id}"
-    user_config = configs.get(config_key, {})
-    return render_template('dashboard.html', guild_id=guild_id, user_id=user_id, config=user_config, fonts=font_files)
-
-@app.route('/save_config/<guild_id>/<user_id>', methods=['POST'])
-def save_config(guild_id, user_id):
-    if 'user_id' not in session or session['user_id'] != user_id: return jsonify({"status": "error", "message": "Unauthorized"}), 403
-    data = request.json; config_key = f"{guild_id}_{user_id}"
-    configs[config_key] = data; json.dump(configs, open(CONFIG_FILE, 'w'), indent=4)
-    return jsonify({"status": "saved"})
-
-@app.route('/reset_config/<guild_id>/<user_id>', methods=['POST'])
-def reset_config(guild_id, user_id):
-    if 'user_id' not in session or session['user_id'] != user_id: return jsonify({"status": "error", "message": "Unauthorized"}), 403
-    config_key = f"{guild_id}_{user_id}"
-    if config_key in configs: del configs[config_key]; json.dump(configs, open(CONFIG_FILE, 'w'), indent=4)
-    return jsonify({"status": "reset"})
-
-@app.route('/upload_bg/<guild_id>/<user_id>', methods=['POST'])
-def upload_bg(guild_id, user_id):
-    if 'user_id' not in session or session['user_id'] != user_id: return "Unauthorized", 403
-    if 'bg_image' not in request.files: return "No file", 400
-    file = request.files['bg_image']; 
-    if file.filename == '': return "No file", 400
-    img = Image.open(file.stream).convert("RGB").resize((900, 250))
-    img.save(os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png"))
-    return "Uploaded", 200
-
-@app.route('/remove_bg/<guild_id>/<user_id>', methods=['POST'])
-def remove_bg(guild_id, user_id):
-    if 'user_id' not in session or session['user_id'] != user_id: return "Unauthorized", 403
-    filepath = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
-    if os.path.exists(filepath):
-        try: os.remove(filepath); return "Removed", 200
-        except: return "Failed to remove", 500
-    return "No file found", 200
-
-@app.route('/get_card/<guild_id>/<user_id>')
-def get_card(guild_id, user_id):
-    try:
-        name = request.args.get('name', 'User'); level = int(request.args.get('level', 0)); rank = int(request.args.get('rank', 0)); current_xp = int(request.args.get('xp', 0)); next_level_xp = int(request.args.get('next_xp', 1000)); progress = float(request.args.get('progress', 0.0)); avatar_url = request.args.get('avatar')
-        config_key = f"{guild_id}_{user_id}"; user_conf = configs.get(config_key, {})
-        config = {"bar_color": user_conf.get('bar_color', admin_config['default_bar_color']), "font_color": user_conf.get('font_color', admin_config['default_font_color']), "stats_color": user_conf.get('stats_color', admin_config['default_stats_color']), "font_family": user_conf.get('font_family', admin_config['default_font']), "font_size": user_conf.get('font_size', admin_config['default_font_size'])}
-        user_bg_path = os.path.join(USER_BG_FOLDER, f"{guild_id}_{user_id}.png")
-        if os.path.exists(user_bg_path): bg_img = Image.open(user_bg_path).convert("RGB").resize((900, 250))
-        elif os.path.exists(DEFAULT_BG_FILE): bg_img = Image.open(DEFAULT_BG_FILE).convert("RGB").resize((900, 250))
-        else: bg_img = Image.new('RGB', (900, 250), color='#2f3136')
-        img = bg_img.copy(); draw = ImageDraw.Draw(img)
-        box_padding = 20; box_x, box_y = box_padding, box_padding; box_w, box_h = 900 - (box_padding * 2), 250 - (box_padding * 2)
-        draw.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h], radius=20, fill="#ffffff")
-        if avatar_url:
-            try:
-                resp = requests.get(avatar_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
-                if resp.status_code == 200:
-                    avatar_img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
-                    mask = Image.new('L', (80, 80), 0); draw_mask = ImageDraw.Draw(mask); draw_mask.ellipse((0, 0, 80, 80), fill=255)
-                    avatar_img = ImageOps.fit(avatar_img, (80, 80), Image.LANCZOS); avatar_img.putalpha(mask)
-                    img.paste(avatar_img, (box_x + 20, box_y + 20), avatar_img)
-            except Exception as e: print(f"⚠️ Avatar error: {e}")
-        font_name = config.get('font_family', admin_config['default_font'])
-        font_file_path = os.path.join(FONTS_FOLDER, f"{font_name}.ttf")
-        font_size_large = int(config.get('font_size', admin_config['default_font_size'])) - 6; font_size_medium = int(font_size_large * 0.55)
-        try:
-            font_large = ImageFont.truetype(font_file_path, font_size_large); font_medium = ImageFont.truetype(font_file_path, font_size_medium)
-        except:
-            fallback_path = os.path.join(FONTS_FOLDER, "Inter.ttf")
-            try: font_large = ImageFont.truetype(fallback_path, font_size_large); font_medium = ImageFont.truetype(fallback_path, font_size_medium)
-            except: font_large = ImageFont.load_default(); font_medium = ImageFont.load_default()
-        text_color = "#000000"; stats_color = "#3d3d3d"; center_x = box_x + (box_w / 2) - 10; center_y_name = 75
-        draw.text((center_x, center_y_name), f"@{name}", fill=text_color, font=font_large, anchor="mm")
-        stats_line1 = f"Level: {level}   XP: {current_xp:,} / {next_level_xp:,}"
-        draw.text((center_x, center_y_name + 42), stats_line1, fill=stats_color, font=font_medium, anchor="mm")
-        if rank > 0: draw.text((center_x, center_y_name + 72), f"Rank: #{rank}", fill=stats_color, font=font_medium, anchor="mm")
-        bar_x = box_x + 30; bar_y = box_y + box_h - 30; bar_width = box_w - 60; bar_height = 20; radius = 12
-        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=radius, fill="#e0e0e0")
-        filled_width = bar_width * progress
-        if filled_width > 0: draw.rounded_rectangle([bar_x, bar_y, bar_x + filled_width, bar_y + bar_height], radius=radius, fill=config.get('bar_color', '#5865F2'))
-        img_io = io.BytesIO(); img.save(img_io, 'PNG'); img_io.seek(0)
-        return send_file(img_io, mimetype='image/png')
-    except Exception as e: print(f"❌ ERROR: {e}"); return f"❌ Image generation failed", 500
-
-@app.route('/leaderboard/<server_id>')
-def web_leaderboard(server_id):
-    try:
-        if not MONGO_URI: return "MongoDB URI not configured.", 500
-        results = levels_collection.find({"guild_id": server_id}).sort("xp", pymongo.DESCENDING).limit(100)
-        formatted_users = []
-        def format_xp(xp): return f"{xp/1000000:.1f}M" if xp >= 1000000 else f"{xp/1000:.1f}K" if xp >= 1000 else str(xp)
-        def get_level_from_xp(xp):
-            level = 0
-            while int(1000 * ((level + 1) ** 1.5)) <= xp: level += 1
-            return level
-        has_data = False
-        for doc in results:
-            has_data = True; user_id = doc["user_id"]; xp = doc["xp"]; level = get_level_from_xp(xp); xp_formatted = format_xp(xp)
-            username = doc.get("username", f"User {user_id[:4]}")
-            avatar_hash = doc.get("avatar_hash")
-            avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{'gif' if avatar_hash and avatar_hash.startswith('a_') else 'png'}?size=256" if avatar_hash else f"https://cdn.discordapp.com/embed/avatars/{(int(user_id) >> 22) % 6}.png"
-            formatted_users.append({"username": username, "avatar_url": avatar_url, "level": level, "xp_formatted": xp_formatted, "messages": "0", "voice_time": "-"})
-        if not has_data: return "No level data found.", 404
-        return render_template('leaderboard.html', server_name=f"Server {server_id[:4]}", users=formatted_users)
-    except Exception as e: print("🔥 LEADERBOARD CRASHED:"); traceback.print_exc(); return f"❌ Error: {e}", 500
-
-# ==========================================
-# SECURE ADMIN ROUTES
-# ==========================================
-@app.route('/admin', methods=['GET'])
-def admin_panel():
-    if 'admin_id' not in session: return redirect(url_for('admin_login_form'))
-    admin = admins_collection.find_one({"_id": ObjectId(session['admin_id'])})
-    if not admin: return redirect(url_for('admin_logout'))
-    guild_id = "1526703518818373743"
-    cached_data = user_cache_collection.find_one({"guild_id": guild_id})
-    members = cached_data["members"] if cached_data and "members" in cached_data else []
-    return render_template('admindashboard.html', admin_username=admin['username'], total_members=len(members), members=members, guild_id=guild_id)
-
-# ==========================================
-# QUEUE ACTIONS TO MONGODB (PURE DB - NO API)
-# ==========================================
-@app.route('/api/admin/create_poll', methods=['POST'])
-def api_create_poll():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    data = request.get_json()
-    if 'channel_id' not in data or not data['channel_id']: return jsonify({"status": "error", "message": "Channel ID is required!"}), 400
-    data['type'] = 'poll'; data['guild_id'] = "1526703518818373743"; data['status'] = 'pending'; data['created_at'] = datetime.utcnow()
-    try: admin_actions_collection.insert_one(data); return jsonify({"status": "success", "message": "Poll queued for bot!"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/admin/mod_action', methods=['POST'])
-def api_mod_action():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    data = request.get_json(); data['type'] = 'mod_action'; data['guild_id'] = "1526703518818373743"; data['status'] = 'pending'; data['created_at'] = datetime.utcnow()
-    try: admin_actions_collection.insert_one(data); return jsonify({"status": "success", "message": "Mod action queued for bot!"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/admin/send_announcement', methods=['POST'])
-def api_send_announcement():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    data = request.get_json(); data['type'] = 'announcement'; data['guild_id'] = "1526703518818373743"; data['status'] = 'pending'; data['created_at'] = datetime.utcnow()
-    try: admin_actions_collection.insert_one(data); return jsonify({"status": "success", "message": "Announcement queued for bot!"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/admin/create_reaction_role', methods=['POST'])
-def api_create_reaction_role():
-    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
-    data = request.get_json(); data['type'] = 'reaction_role'; data['guild_id'] = "1526703518818373743"; data['status'] = 'pending'; data['created_at'] = datetime.utcnow()
-    try: admin_actions_collection.insert_one(data); return jsonify({"status": "success", "message": "Reaction Role queued for bot!"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-# ==========================================
-# ADMIN LOGIN & LOGOUT
-# ==========================================
-@app.route('/admin/login')
-def admin_login_form():
-    if 'admin_id' in session: return redirect(url_for('admin_panel'))
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin Login</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-        <style>
-            body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .card { background: #2f3136; padding: 40px; border-radius: 16px; border: 1px solid #40444b; max-width: 350px; width: 100%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-            h1 { color: #45ddc0; margin: 0 0 10px 0; font-size: 24px; }
-            p { color: #b9bbbe; margin: 0 0 20px 0; font-size: 14px; }
-            form { display: flex; flex-direction: column; gap: 15px; }
-            input { padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; transition: 0.2s; }
-            input:focus { border-color: #5865F2; box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.2); }
-            button { background: #5865F2; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s; }
-            button:hover { background: #4752c4; transform: scale(1.02); }
-            .error { color: #ff5555; font-size: 14px; margin-top: 10px; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>🛡️ Admin Login</h1>
-            <p>Enter your admin credentials.</p>
-            <form method="POST" action="/admin/login">
-                <input type="text" name="username" placeholder="Admin Username" required>
-                <input type="password" name="password" placeholder="Admin Password" required>
-                <button type="submit">Login</button>
+    <div id="modal-overlay">
+        <div id="modal-box">
+            <h2 id="modalTitle">Moderate User</h2>
+            <form id="modalForm">
+                <input type="hidden" name="user_id" id="modalUserId">
+                <input type="hidden" name="action" id="modalAction">
+                <div class="form-group"><label>Reason</label><input type="text" name="reason" class="form-control" required></div>
+                <div class="form-group" id="durationGroup"><label>Duration (seconds)</label><input type="number" name="duration" class="form-control" value="60" min="1"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="width: auto;">Execute Action</button>
+                </div>
             </form>
         </div>
-    </body>
-    </html>
-    '''
+    </div>
 
-@app.route('/admin/login', methods=['POST'])
-def admin_login_process():
-    username = request.form.get('username')
-    password = request.form.get('password')
-    if not username or not password: return "❌ Username and password required.", 400
-    admin = admins_collection.find_one({"username": username})
-    if not admin or not check_password_hash(admin['password'], password): return "❌ Invalid credentials.", 401
-    session['admin_id'] = str(admin['_id']); session['admin_username'] = admin['username']; return redirect(url_for('admin_panel'))
+    <script>
+        const GUILD_ID = "{{ guild_id }}"; 
+        function filterUsers() {
+            const input = document.getElementById('userSearchInput');
+            const filter = input.value.toLowerCase();
+            const rows = document.querySelectorAll('#userListContainer .user-row');
+            rows.forEach(row => {
+                const name = row.getAttribute('data-username');
+                const id = row.getAttribute('data-id');
+                row.style.display = (name.includes(filter) || id.includes(filter)) ? 'flex' : 'none';
+            });
+        }
 
-@app.route('/admin/logout'): session.pop('admin_id', None); session.pop('admin_username', None); return redirect(url_for('admin_login_form'))
+        async function createReactionRole(event) {
+            event.preventDefault();
+            const btn = document.getElementById('rrSubmitBtn'); const resultDiv = document.getElementById('rrResult');
+            btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
+            const channelId = document.getElementById('rr_channel_id').value; const title = document.getElementById('rr_title').value;
+            const description = document.getElementById('rr_description').value; const color = document.getElementById('rr_color').value;
+            const roleRows = document.querySelectorAll('.rr-role-row'); const roles = [];
+            roleRows.forEach(row => {
+                const emoji = row.querySelector('.rr-emoji').value; const roleId = row.querySelector('.rr-roleid').value;
+                const desc = row.querySelector('.rr-desc').value;
+                if(emoji && roleId) roles.push({ emoji, role_id: parseInt(roleId), description: desc });
+            });
+            if(roles.length === 0) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Please add at least one role."; btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; return; }
+            try {
+                const response = await fetch('/api/admin/create_reaction_role', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles })
+                });
+                const data = await response.json();
+                if(response.ok) { resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Created! Message ID: ${data.message_id}`; }
+                else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${data.message}`; }
+            } catch (e) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`; }
+            finally { btn.disabled = false; btn.innerText = "Create Reaction Role Menu"; }
+        }
 
-@app.route('/admin/signup/<token>')
-def admin_signup(token):
-    invite = invites_collection.find_one({"token": token, "used": False})
-    if not invite: return "❌ Invalid or already used invite link.", 404
-    oauth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={DASHBOARD_URL}/admin/authorize&response_type=code&scope=identify&state={token}"
-    return redirect(oauth_url)
+        async function submitPoll(event) {
+            event.preventDefault();
+            const channelId = document.getElementById('poll_channel').value.trim();
+            const question = document.getElementById('poll_question').value;
+            const duration = document.getElementById('poll_duration').value;
+            const poll_type = document.getElementById('poll_type').value;
+            const optionsInputs = document.querySelectorAll('#poll-options-container input');
+            const options = [];
+            optionsInputs.forEach(input => {
+                if(input.value.trim() !== '') options.push(input.value.trim());
+            });
+            if(options.length < 2) { alert("❌ Please provide at least 2 options."); return; }
+            if(!channelId) { alert("❌ Please provide a Channel ID, or use the 'Create Global Poll' button."); return; }
+            const data = { guild_id: GUILD_ID, channel_id: channelId, question, options, duration, poll_type };
+            try {
+                const response = await fetch('/api/admin/create_poll', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if(response.ok) {
+                    alert(`✅ Poll queued for bot!`);
+                    document.getElementById('pollForm').reset();
+                    document.getElementById('poll-options-container').innerHTML = `
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
+                    `;
+                } else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+        }
 
-@app.route('/admin/authorize')
-def admin_authorize():
-    code = request.args.get('code'); token = request.args.get('state')
-    if not code or not token: return "❌ Missing authorization code or state.", 400
-    invite = invites_collection.find_one({"token": token, "used": False})
-    if not invite: return "❌ Invalid or expired invite token.", 404
-    data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "grant_type": "authorization_code", "code": code, "redirect_uri": f"{DASHBOARD_URL}/admin/authorize"}
-    try:
-        token_data = requests.post("https://discord.com/api/oauth2/token", data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}).json()
-        user_info = requests.get("https://discord.com/api/v10/users/@me", headers={"Authorization": f"Bearer {token_data.get('access_token')}"}).json()
-        discord_id = str(user_info["id"])
-        if discord_id != invite["discord_id"]: return "❌ This Discord account does not match the invite.", 403
-        invites_collection.update_one({"token": token}, {"$set": {"used": True}})
-        return open('templates/admin_register.html', 'r').read().replace("{{ username }}", user_info['username']).replace("{{ discord_id }}", discord_id)
-    except Exception as e: return f"❌ Authentication failed: {e}", 500
+        async function submitGlobalPoll(event) {
+            event.preventDefault();
+            const question = document.getElementById('poll_question').value;
+            const duration = document.getElementById('poll_duration').value;
+            const poll_type = document.getElementById('poll_type').value;
+            const optionsInputs = document.querySelectorAll('#poll-options-container input');
+            const options = [];
+            optionsInputs.forEach(input => {
+                if(input.value.trim() !== '') options.push(input.value.trim());
+            });
+            if(options.length < 2) { alert("❌ Please provide at least 2 options."); return; }
+            const globalChannelId = "1526730287378075648";
+            const data = { guild_id: GUILD_ID, channel_id: globalChannelId, question, options, duration, poll_type };
+            try {
+                const response = await fetch('/api/admin/create_poll', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if(response.ok) {
+                    alert(`✅ Global Poll queued for channel <#${globalChannelId}>!`);
+                    document.getElementById('pollForm').reset();
+                    document.getElementById('poll-options-container').innerHTML = `
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 1" required></div>
+                        <div class="poll-option"><input type="text" name="options[]" class="form-control" placeholder="Option 2" required></div>
+                    `;
+                } else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+        }
 
-@app.route('/admin/register/<discord_id>', methods=['POST'])
-def admin_register(discord_id):
-    username = request.form.get('username'); password = request.form.get('password')
-    if not username or not password: return "❌ Username and password required.", 400
-    if admins_collection.find_one({"discord_id": discord_id}): return "❌ This Discord account already has an admin account.", 400
-    result = admins_collection.insert_one({"discord_id": discord_id, "username": username, "password": generate_password_hash(password)})
-    session['admin_id'] = str(result.inserted_id); session['admin_username'] = username; return redirect(url_for('admin_panel'))
+        async function submitAnnouncement(event) {
+            event.preventDefault();
+            const channelId = document.getElementById('announce_channel').value; const content = document.getElementById('announce_content').value;
+            if(!content.trim()) { alert("❌ Announcement content cannot be empty."); return; }
+            const data = { guild_id: GUILD_ID, channel_id: channelId, content };
+            try {
+                const response = await fetch('/api/admin/send_announcement', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if(response.ok) { alert(`✅ Announcement sent!`); document.getElementById('announcementForm').reset(); }
+                else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to connect to bot: ${e}`); }
+        }
 
-# ==========================================
-# BOT OWNER PANEL
-# ==========================================
-@app.route('/owner/<owner_token>')
-def owner_panel(owner_token):
-    secret = owner_secrets_collection.find_one({"owner_id": "1516568962966753291"})
-    if not secret or secret["token"] != owner_token: return "❌ Unauthorized.", 403
-    admins = list(admins_collection.find({}, {"_id": 0, "username": 1, "discord_id": 1}))
-    top_users_raw = list(levels_collection.find().sort("xp", pymongo.DESCENDING).limit(10)); top_users = []
-    for u in top_users_raw:
-        xp = u["xp"]; xp_str = f"{xp/1000:.1f}K" if xp >= 1000 else str(xp)
-        avatar_hash = u.get("avatar_hash")
-        avatar_url = f"https://cdn.discordapp.com/avatars/{u['user_id']}/{avatar_hash}.{'gif' if avatar_hash and avatar_hash.startswith('a_') else 'png'}?size=128" if avatar_hash else "https://cdn.discordapp.com/embed/avatars/0.png"
-        top_users.append({"username": u.get("username", "Unknown"), "level": (int((int(xp/1000)**(2/3)))), "xp_formatted": xp_str, "avatar_url": avatar_url})
-    guild_id = secret.get("guild_id"); roles = []; categories = []; total_channels = 0
-    if guild_id:
-        server_meta = db["server_meta"].find_one({"guild_id": guild_id})
-        if server_meta:
-            roles = server_meta.get("roles", []); categories = server_meta.get("categories", [])
-            for cat in categories: total_channels += len(cat.get("channels", []))
-    stats = {"admins": len(admins), "users": levels_collection.count_documents({}), "roles": len(roles), "channels": total_channels}
-    return render_template('ownerdashboard.html', stats=stats, admins=admins, top_users=top_users, roles=roles, categories=categories)
+        function openModal(userId, userName, action) {
+            document.getElementById('modal-overlay').style.display = 'flex';
+            document.getElementById('modalUserId').value = userId; document.getElementById('modalAction').value = action;
+            document.getElementById('modalTitle').innerText = `${action.toUpperCase()} - ${userName}`;
+            const durationGroup = document.getElementById('durationGroup');
+            if (action === 'kick' || action === 'ban' || action === 'unban') durationGroup.style.display = 'none';
+            else durationGroup.style.display = 'block';
+        }
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+        function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+        document.getElementById('modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+        document.getElementById('modalForm').addEventListener('submit', async function(e) {
+            e.preventDefault(); const btn = document.querySelector('#modalForm .btn-primary');
+            btn.disabled = true; btn.innerText = "Executing...";
+            const formData = new FormData(this); const data = Object.fromEntries(formData.entries());
+            data.guild_id = GUILD_ID;
+            try {
+                const response = await fetch('/api/admin/mod_action', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+                });
+                const result = await response.json(); closeModal();
+                if(result.status === 'success') { const actionName = result.action ? result.action.toUpperCase() : 'Action'; alert(`✅ ${actionName} executed successfully!`); }
+                else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed to contact bot: ${e}`); }
+            finally { btn.disabled = false; btn.innerText = "Execute Action"; }
+        });
+
+        function addPollOption() {
+            const container = document.getElementById('poll-options-container');
+            const count = container.children.length + 1; const div = document.createElement('div');
+            div.className = 'poll-option'; div.innerHTML = `<input type="text" name="options[]" class="form-control" placeholder="Option ${count}" required>`;
+            container.appendChild(div);
+        }
+
+        function addRRRole() {
+            const container = document.getElementById('rr_roles_container'); const div = document.createElement('div');
+            div.className = 'rr-role-row'; div.style = "display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;";
+            div.innerHTML = `<div style="flex: 1;"><label style="font-size: 12px;">Emoji</label><input type="text" class="form-control rr-emoji" required></div>
+                <div style="flex: 2;"><label style="font-size: 12px;">Role ID</label><input type="text" class="form-control rr-roleid" required></div>
+                <div style="flex: 2;"><label style="font-size: 12px;">Description</label><input type="text" class="form-control rr-desc"></div>`;
+            container.appendChild(div);
+        }
+    </script>
+</body>
+</html>
