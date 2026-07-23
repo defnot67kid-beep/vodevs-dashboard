@@ -459,20 +459,19 @@ def api_send_announcement():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/api/admin/create_reaction_role', methods=['POST'])
-def api_create_reaction_role():
+@app.route('/api/admin/add_reaction_role', methods=['POST'])
+def api_add_reaction_role():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
 
     data = request.get_json()
-    data['type'] = 'reaction_role'
-    # Force the correct guild ID here
+    data['type'] = 'add_reaction_role'
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
     try:
         admin_actions_collection.insert_one(data)
-        return jsonify({"status": "success", "message": "Reaction Role queued for bot!"})
+        return jsonify({"status": "success", "message": "Role add queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
