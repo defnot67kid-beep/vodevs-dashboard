@@ -415,6 +415,10 @@ def api_create_poll():
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
+    # 1. Ensure we save the channel_id to MongoDB
+    if 'channel_id' not in data or not data['channel_id']:
+        return jsonify({"status": "error", "message": "Channel ID is required!"}), 400
+
     try:
         admin_actions_collection.insert_one(data)
         return jsonify({"status": "success", "message": "Poll queued for bot!"})
