@@ -30,7 +30,7 @@
         .btn-mute { background: #5865F2; }
         .btn-timeout { background: #ed4245; }
         .btn-ban { background: #ed4245; }
-        .btn-warn { background: #faa61a; } /* New Warn Button Color */
+        .btn-warn { background: #faa61a; }
         .btn-primary { background: #5865F2; width: 100%; padding: 10px; margin-top: 10px; }
         .btn-primary:hover { background: #4752c4; }
         .btn-success { background: #3ba55c; width: 100%; padding: 10px; margin-top: 10px; }
@@ -342,9 +342,14 @@
             document.getElementById('modalUserId').value = userId; document.getElementById('modalAction').value = action;
             document.getElementById('modalTitle').innerText = `${action.toUpperCase()} - ${userName}`;
             const durationGroup = document.getElementById('durationGroup');
-            if (action === 'kick' || action === 'ban' || action === 'warn') durationGroup.style.display = 'none';
-            else durationGroup.style.display = 'block';
+            // Hide duration for kick, ban, and warn
+            if (action === 'kick' || action === 'ban' || action === 'warn' || action === 'unban') {
+                durationGroup.style.display = 'none';
+            } else {
+                durationGroup.style.display = 'block';
+            }
         }
+
         function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
         document.getElementById('modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
         document.getElementById('modalForm').addEventListener('submit', async function(e) {
