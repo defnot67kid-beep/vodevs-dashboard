@@ -4,91 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Server Panel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: #0d0d15; color: #e2e2e2; padding: 30px; min-height: 100vh; }
-        
+        body { font-family: 'Inter', sans-serif; background: #12121a; color: #e2e2e2; padding: 30px; }
         .container { max-width: 1400px; margin: 0 auto; }
-        
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #2f3136; padding-bottom: 20px; }
-        .header h1 { color: #45ddc0; display: flex; align-items: center; gap: 10px; font-size: 26px; }
-        .header h1 span { color: #ffffff; }
-        .nav a { color: #ff5555; text-decoration: none; font-weight: 600; background: #1e1e2e; padding: 8px 16px; border-radius: 8px; border: 1px solid #2f3136; transition: 0.2s; }
-        .nav a:hover { background: #2f3136; border-color: #ff5555; }
-
-        .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .header h1 { color: #45ddc0; display: flex; align-items: center; gap: 10px; }
+        .nav a { color: #ff5555; text-decoration: none; font-weight: bold; background: #2f3136; padding: 8px 16px; border-radius: 8px; border: 1px solid #40444b; }
+        .nav a:hover { background: #3f4146; }
+        .admin-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; }
         @media (max-width: 1000px) { .admin-grid { grid-template-columns: 1fr; } }
-
-        .card { background: #1a1a24; border: 1px solid #2a2a35; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); transition: 0.2s; }
-        .card:hover { border-color: #3a3a45; }
-        
-        .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 18px; font-size: 16px; border-bottom: 1px solid #2a2a35; padding-bottom: 12px; display: flex; align-items: center; gap: 10px; }
-        .card-title span { color: #45ddc0; }
-
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; color: #b9bbbe; font-size: 13px; font-weight: 500; margin-bottom: 6px; letter-spacing: 0.3px; }
-        .form-control { width: 100%; padding: 11px 14px; border-radius: 8px; border: 1px solid #2a2a35; background: #12121a; color: #e2e2e2; font-size: 14px; outline: none; transition: 0.2s; font-family: inherit; }
-        .form-control:focus { border-color: #5865F2; box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.15); }
-        textarea.form-control { resize: vertical; min-height: 80px; line-height: 1.5; }
-        input[type="color"] { height: 44px; padding: 4px; cursor: pointer; background: transparent; }
-
-        .btn { padding: 8px 14px; border: none; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; color: white; transition: 0.2s; text-decoration: none; display: inline-block; }
-        .btn-primary { background: #5865F2; width: 100%; padding: 12px; margin-top: 8px; }
-        .btn-primary:hover { background: #4752c4; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(88, 101, 242, 0.2); }
-        .btn-success { background: #3ba55c; width: 100%; padding: 12px; margin-top: 8px; }
-        .btn-success:hover { background: #2e884a; transform: translateY(-1px); }
-        .btn-warning { background: #faa61a; width: 100%; padding: 12px; margin-top: 8px; }
-        .btn-warning:hover { background: #d68b10; transform: translateY(-1px); }
-        .btn-danger { background: #ed4245; width: auto; padding: 6px 12px; font-size: 12px; }
-        .btn-danger:hover { background: #c92a2a; }
-        .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; margin: 0; }
-        
-        .search-bar { width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid #2a2a35; background: #12121a; color: white; font-size: 14px; outline: none; margin-bottom: 18px; transition: 0.2s; }
+        .card { background: #1e1e2e; border: 1px solid #2f3136; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid #2f3136; padding-bottom: 10px; }
+        .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; margin-bottom: 15px; }
         .search-bar:focus { border-color: #5865F2; }
-        .user-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #1f1f29; transition: 0.2s; }
+        .user-row { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-bottom: 1px solid #26262e; }
         .user-row:last-child { border-bottom: none; }
-        .user-row:hover { background: #1f1f29; padding-left: 10px; padding-right: 10px; border-radius: 6px; }
-        .user-avatar { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #2a2a35; }
-        .user-name { font-weight: 600; flex: 1; color: #ffffff; font-size: 15px; }
-        .status-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; text-transform: capitalize; font-weight: 500; }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; }
+        .user-name { font-weight: 600; flex: 1; color: white; }
+        .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn { padding: 6px 12px; border: none; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; color: white; transition: 0.2s; text-decoration: none; display: inline-block;}
+        .btn-kick { background: #faa61a; }
+        .btn-mute { background: #5865F2; }
+        .btn-timeout { background: #ed4245; }
+        .btn-ban { background: #ed4245; }
+        .btn-warn { background: #faa61a; }
+        .btn-unmute { background: #3ba55c; }
+        .btn-primary { background: #5865F2; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-primary:hover { background: #4752c4; }
+        .btn-success { background: #3ba55c; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-success:hover { background: #2e884a; }
+        .btn-warning { background: #faa61a; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-warning:hover { background: #d68b10; }
+        .btn-danger { background: #ed4245; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-danger:hover { background: #c92a2a; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; color: #b9bbbe; font-size: 14px; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #40444b; background: #202225; color: white; outline: none; }
+        .form-control:focus { border-color: #5865F2; }
+        textarea.form-control { resize: vertical; min-height: 80px; }
+        .poll-option { display: flex; gap: 10px; margin-bottom: 10px; }
+        .poll-option input { flex: 1; }
+        .add-option-btn { background: #2f3136; border: 1px dashed #b9bbbe; color: #b9bbbe; padding: 5px 15px; border-radius: 6px; cursor: pointer; width: 100%; }
+        .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; text-transform: capitalize; }
         .status-online { background: #3ba55c; color: white; }
         .status-idle { background: #faa61a; color: white; }
         .status-dnd { background: #ed4245; color: white; }
         .status-offline { background: #4f545c; color: white; }
-
-        #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); display:none; justify-content:center; align-items:center; z-index:1000; }
-        #modal-box { background: #1a1a24; padding: 30px; border-radius: 16px; border: 1px solid #2a2a35; width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.8); }
-        #modal-box h2 { color: #45ddc0; margin-bottom: 15px; font-size: 22px; border-bottom: 1px solid #2a2a35; padding-bottom: 12px; }
-        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; border-top: 1px solid #2a2a35; padding-top: 15px; }
-        .btn-cancel { background: #4f545c; padding: 10px 20px; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500; transition: 0.2s; }
-        .btn-cancel:hover { background: #5f646c; }
-        .warn-item { background: #12121a; padding: 12px 14px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #1f1f29; }
-        .warn-item div { flex: 1; }
-        .warn-item strong { color: #faa61a; }
-        .warn-item small { color: #b9bbbe; display: block; margin-top: 4px; font-size: 12px; }
-        #warningsContainer::-webkit-scrollbar { width: 6px; }
-        #warningsContainer::-webkit-scrollbar-track { background: #0d0d15; border-radius: 10px; }
-        #warningsContainer::-webkit-scrollbar-thumb { background: #2a2a35; border-radius: 10px; }
-
-        .poll-option { display: flex; gap: 10px; margin-bottom: 10px; }
-        .poll-option input { flex: 1; }
-        .add-option-btn { background: #1f1f29; border: 1px dashed #3a3a45; color: #b9bbbe; padding: 8px 15px; border-radius: 8px; cursor: pointer; width: 100%; font-size: 13px; transition: 0.2s; }
-        .add-option-btn:hover { border-color: #5865F2; color: #e2e2e2; background: #2a2a35; }
-
-        .rr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 800px) { .rr-grid { grid-template-columns: 1fr; } }
-        .rr-card { background: #12121a; border-radius: 12px; padding: 16px; border: 1px solid #1f1f29; }
-        .rr-card-title { font-size: 14px; font-weight: 600; color: #b9bbbe; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-        .rr-card-title .step { background: #5865F2; color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; }
-        
-        .result-msg { margin-top: 12px; font-weight: 600; font-size: 14px; }
+        #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
+        #modal-box { background: #1e1e2e; padding: 30px; border-radius: 12px; border: 1px solid #2f3136; width: 600px; max-width: 95%; }
+        #modal-box h2 { color: #45ddc0; margin-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 15px; justify-content: flex-end; }
+        .btn-cancel { background: #4f545c; padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; }
+        .warn-item { background: #2f3136; padding: 10px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .warn-item small { color: #b9bbbe; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🛠️ <span>Admin Server Panel</span></h1>
+            <h1>🛠️ Admin Server Panel</h1>
             <div class="nav">
                 <span style="color: #b9bbbe; margin-right: 15px;">Logged in as {{ admin_username }}</span>
                 <a href="/admin/logout">Logout</a>
@@ -96,23 +72,20 @@
         </div>
 
         <div class="admin-grid">
-            
-            <!-- ================= LEFT COLUMN ================= -->
-            <div class="left-column">
-                
-                <!-- 1. Test Mode Toggle -->
+            <div class="left-sidebar">
+                <!-- Test Mode Toggle -->
                 <div class="card">
-                    <div class="card-title"><span>🧪</span> Test Mode <span style="font-size: 12px; font-weight: 400; color: #b9bbbe;">(Warns)</span></div>
-                    <p style="color: #b9bbbe; font-size: 13px; margin-bottom: 15px; line-height: 1.5;">
-                        When enabled, warnings will be sent to <code style="background: #12121a; padding: 2px 6px; border-radius: 4px; font-size: 12px;">1528431460535500940</code> instead of the live channel.
+                    <div class="card-title">🧪 Test Mode (Warns)</div>
+                    <p style="color: #b9bbbe; font-size: 14px; margin-bottom: 10px;">
+                        When enabled, warnings will be sent to <code>1528431460535500940</code> instead of the live channel.
                     </p>
-                    <button id="testModeBtn" class="btn btn-primary" onclick="toggleTestMode()">🔄 Toggle Test Mode</button>
-                    <div id="testModeResult" class="result-msg" style="color: #45ddc0;"></div>
+                    <button id="testModeBtn" class="btn btn-primary" style="background: #5865F2;" onclick="toggleTestMode()">🔄 Toggle Test Mode</button>
+                    <div id="testModeResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0; font-size: 14px;"></div>
                 </div>
 
-                <!-- 2. Unban Tool -->
+                <!-- 1. UNBAN TOOL -->
                 <div class="card">
-                    <div class="card-title"><span>🔓</span> Unban User by ID</div>
+                    <div class="card-title">🔓 Unban User by ID</div>
                     <form id="unbanForm" onsubmit="submitUnban(event)">
                         <div class="form-group">
                             <label>User ID</label>
@@ -126,9 +99,9 @@
                     </form>
                 </div>
 
-                <!-- 3. Create Poll -->
+                <!-- 2. CREATE POLL -->
                 <div class="card">
-                    <div class="card-title"><span>📊</span> Create Poll</div>
+                    <div class="card-title">📊 Create Poll</div>
                     <form id="pollForm" onsubmit="submitPoll(event)">
                         <div class="form-group">
                             <label>Channel ID</label>
@@ -158,97 +131,55 @@
                     </form>
                 </div>
 
-                <!-- 4. Announcement -->
+                <!-- 3. GLOBAL ANNOUNCEMENT -->
                 <div class="card">
-                    <div class="card-title"><span>📢</span> Global Announcement</div>
+                    <div class="card-title">📢 Global Announcement</div>
                     <form id="announcementForm" onsubmit="submitAnnouncement(event)">
-                        <div class="form-group">
-                            <label>Channel ID</label>
-                            <input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648">
-                        </div>
-                        <div class="form-group">
-                            <label>Message Content</label>
-                            <textarea name="content" id="announce_content" class="form-control" required placeholder="Enter announcement text here..."></textarea>
-                        </div>
+                        <div class="form-group"><label>Channel ID</label><input type="text" name="channel_id" id="announce_channel" class="form-control" value="1526730287378075648"></div>
+                        <div class="form-group"><label>Message Content</label><textarea name="content" id="announce_content" class="form-control" required></textarea></div>
                         <button type="submit" class="btn btn-primary">Send Announcement</button>
                     </form>
                 </div>
-
-                <!-- 5. Reaction Roles (Step 1 + Step 2) -->
-                <div class="card">
-                    <div class="card-title"><span>🔘</span> Reaction Roles</div>
-                    <div class="rr-grid">
-                        
-                        <!-- Step 1: Create Menu -->
-                        <div class="rr-card">
-                            <div class="rr-card-title"><span class="step">Step 1</span> Create Role Menu</div>
-                            <form id="rrCreateForm" onsubmit="createReactionRole(event)">
-                                <div class="form-group"><label>Channel ID</label><input type="text" id="rr_channel_id" class="form-control" required></div>
-                                <div class="form-group"><label>Title</label><input type="text" id="rr_title" class="form-control" required></div>
-                                <div class="form-group"><label>Description</label><textarea id="rr_description" class="form-control" rows="2"></textarea></div>
-                                <div class="form-group"><label>Embed Color</label><input type="color" id="rr_color" class="form-control" value="#5865F2"></div>
-                                <button type="submit" class="btn btn-success" id="rrSubmitBtn">Create Empty Menu</button>
-                                <div id="rrResult" class="result-msg"></div>
-                            </form>
-                        </div>
-
-                        <!-- Step 2: Add Role to Menu -->
-                        <div class="rr-card">
-                            <div class="rr-card-title"><span class="step">Step 2</span> Add Role to Menu</div>
-                            <form id="rrAddForm" onsubmit="addReactionRole(event)">
-                                <div class="form-group"><label>Message ID</label><input type="text" id="rr_msg_id" class="form-control" required placeholder="ID of the menu message"></div>
-                                <div class="form-group"><label>Emoji</label><input type="text" id="rr_add_emoji" class="form-control" required placeholder="✅"></div>
-                                <div class="form-group"><label>Role ID</label><input type="text" id="rr_add_roleid" class="form-control" required placeholder="123456789"></div>
-                                <div class="form-group"><label>Description</label><input type="text" id="rr_add_desc" class="form-control" placeholder="Access to..."></div>
-                                <button type="submit" class="btn btn-warning">Add Role to Menu</button>
-                            </form>
-                        </div>
-
-                    </div>
-                </div>
-
             </div>
 
-            <!-- ================= RIGHT COLUMN ================= -->
-            <div class="right-column">
-                
-                <!-- 6. Member List -->
-                <div class="card" style="height: 100%;">
-                    <div class="card-title"><span>👥</span> Server Members <span style="font-size: 14px; font-weight: 400; color: #b9bbbe;">({{ total_members }})</span></div>
-                    <input type="text" id="userSearchInput" class="search-bar" placeholder="🔍 Search by username or ID...">
-                    
+            <div class="right-content">
+                <!-- 6. MEMBER LIST -->
+                <div class="card">
+                    <div class="card-title">👥 Server Members ({{ total_members }})</div>
+                    <input type="text" id="userSearchInput" class="search-bar" placeholder="🔍 Search by username or ID..." onkeyup="filterUsers()">
                     <div id="userListContainer">
                         {% for user in members %}
                         <div class="user-row" data-username="{{ user.name.lower() }}" data-id="{{ user.id }}">
                             <img src="{{ user.avatar_url }}" class="user-avatar" onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
                             <span class="user-name">{{ user.name }}</span>
                             <span class="status-badge status-{{ user.status }}">{{ user.status }}</span>
-                            <button class="btn btn-primary btn-sm" onclick="openManageUser('{{ user.id }}', '{{ user.name }}')">Manage</button>
+                            <div class="user-actions">
+                                <button class="btn btn-primary" onclick="openManageUser('{{ user.id }}', '{{ user.name }}')">⚙️ Manage</button>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <!-- ================= MANAGE USER MODAL ================= -->
+    <!-- MANAGE USER MODAL -->
     <div id="modal-overlay">
         <div id="modal-box">
             <h2 id="modalTitle">⚙️ Manage User</h2>
             
-            <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid #2a2a35; padding-bottom: 16px;">
-                <button class="btn btn-warning btn-sm" onclick="quickAction('warn')">Warn</button>
-                <button class="btn btn-timeout btn-sm" style="background: #ed4245;" onclick="quickAction('timeout')">Timeout</button>
-                <button class="btn btn-success btn-sm" onclick="quickAction('remove_timeout')">Remove Timeout</button>
-                <button class="btn btn-kick btn-sm" style="background: #faa61a;" onclick="quickAction('kick')">Kick</button>
-                <button class="btn btn-ban btn-sm" style="background: #ed4245;" onclick="quickAction('ban')">Ban</button>
-                <button class="btn btn-success btn-sm" onclick="quickAction('clear_warnings')">Clear Warnings</button>
+            <div style="margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #2f3136; padding-bottom: 15px;">
+                <button class="btn btn-warn" onclick="quickAction('warn')">Warn</button>
+                <button class="btn btn-timeout" onclick="quickAction('timeout')">Timeout</button>
+                <button class="btn btn-unmute" onclick="quickAction('remove_timeout')">Remove Timeout</button>
+                <button class="btn btn-kick" onclick="quickAction('kick')">Kick</button>
+                <button class="btn btn-ban" onclick="quickAction('ban')">Ban</button>
+                <button class="btn btn-success" onclick="quickAction('clear_warnings')">Clear Warnings</button>
             </div>
 
-            <div id="warningsContainer" style="max-height: 350px; overflow-y: auto; padding-right: 5px;">
-                <p style="color: #b9bbbe; text-align: center; padding: 20px 0;">Loading warnings...</p>
+            <div id="warningsContainer" style="max-height: 300px; overflow-y: auto;">
+                <p style="color: #b9bbbe; text-align: center;">Loading warnings...</p>
             </div>
 
             <div class="modal-actions">
@@ -257,7 +188,6 @@
         </div>
     </div>
 
-    <!-- ================= JAVASCRIPT ================= -->
     <script>
         const GUILD_ID = "{{ guild_id }}"; 
         let CURRENT_USER_ID = null;
@@ -274,6 +204,7 @@
             });
         }
 
+        // SAFE FETCH
         async function safeFetch(url, options) {
             const response = await fetch(url, options);
             const text = await response.text();
@@ -281,6 +212,7 @@
             catch (e) { throw new Error("Server error: " + text.substring(0, 100)); }
         }
 
+        // TOGGLE TEST MODE
         async function toggleTestMode() {
             const btn = document.getElementById('testModeBtn');
             const resultDiv = document.getElementById('testModeResult');
@@ -296,6 +228,7 @@
             finally { btn.disabled = false; btn.innerText = "🔄 Toggle Test Mode"; }
         }
 
+        // OPEN MANAGE USER MODAL
         async function openManageUser(userId, userName) {
             CURRENT_USER_ID = userId;
             CURRENT_USER_NAME = userName;
@@ -303,15 +236,16 @@
             document.getElementById('modal-overlay').style.display = 'flex';
             
             const container = document.getElementById('warningsContainer');
-            container.innerHTML = '<p style="color: #b9bbbe; text-align: center; padding: 20px 0;">Loading warnings...</p>';
+            container.innerHTML = '<p style="color: #b9bbbe; text-align: center;">Loading warnings...</p>';
             
+            // Fetch warning data from MongoDB via the bot
             try {
                 const result = await safeFetch('/api/admin/get_user_warnings', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId })
                 });
                 if(result.status === 'success' && result.warnings && result.warnings.length > 0) {
-                    let html = `<p style="color: #b9bbbe; margin-bottom: 12px;">Total Warnings: <strong style="color: #faa61a;">${result.warnings.length}</strong></p>`;
+                    let html = `<p style="color: #b9bbbe; margin-bottom: 10px;">Total Warnings: ${result.warnings.length}</p>`;
                     result.warnings.forEach((w, index) => {
                         html += `
                             <div class="warn-item">
@@ -319,24 +253,26 @@
                                     <strong>#${index + 1}</strong> ${w.reason}<br>
                                     <small>Mod: ${w.moderator} • ${new Date(w.timestamp).toLocaleString()}</small>
                                 </div>
-                                <button class="btn btn-danger" onclick="deleteWarning('${w._id}')">Delete</button>
+                                <button class="btn btn-danger" style="width:auto; padding: 4px 8px;" onclick="deleteWarning('${w._id}')">Delete</button>
                             </div>
                         `;
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<p style="color: #b9bbbe; text-align: center; padding: 20px 0;">No warnings found for this user.</p>';
+                    container.innerHTML = '<p style="color: #b9bbbe; text-align: center;">No warnings found for this user.</p>';
                 }
             } catch (e) {
                 container.innerHTML = `<p style="color: #ff5555; text-align: center;">Error loading warnings: ${e.message}</p>`;
             }
         }
 
+        // QUICK ACTIONS FROM MANAGE MODAL
         async function quickAction(action) {
             if(!CURRENT_USER_ID) return;
             let reason = prompt(`Enter reason for ${action.toUpperCase()}:`);
-            if(reason === null) return;
+            if(reason === null) return; // Cancel
             if(!reason.trim()) reason = "No reason provided.";
+            
             try {
                 const result = await safeFetch('/api/admin/mod_action', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -347,6 +283,7 @@
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
+        // DELETE SINGLE WARNING
         async function deleteWarning(warningId) {
             if(!confirm("Are you sure you want to delete this specific warning?")) return;
             try {
@@ -359,6 +296,7 @@
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
+        // UNBAN (From sidebar)
         async function submitUnban(event) {
             event.preventDefault();
             const userId = document.getElementById('unban_user_id').value.trim();
@@ -374,67 +312,7 @@
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
-        // ==========================================================
-        // REACTION ROLE JAVASCRIPT (FIXED TO SHOW MESSAGE ID)
-        // ==========================================================
-        async function createReactionRole(event) {
-            event.preventDefault();
-            const btn = document.getElementById('rrSubmitBtn'); 
-            const resultDiv = document.getElementById('rrResult');
-            btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
-            
-            const channelId = document.getElementById('rr_channel_id').value; 
-            const title = document.getElementById('rr_title').value;
-            const description = document.getElementById('rr_description').value; 
-            const color = document.getElementById('rr_color').value;
-
-            if(!channelId) { 
-                resultDiv.style.color = "#ff5555"; 
-                resultDiv.innerText = "❌ Please enter a valid Channel ID."; 
-                btn.disabled=false; 
-                return; 
-            }
-
-            try {
-                const result = await safeFetch('/api/admin/create_reaction_role', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles: [] })
-                });
-                
-                if(result.status === 'success') {
-                    resultDiv.style.color = "#45ddc0"; 
-                    resultDiv.innerText = `✅ Menu Created! Msg ID: ${result.message_id}`;
-                } else { 
-                    resultDiv.style.color = "#ff5555"; 
-                    resultDiv.innerText = `❌ Error: ${result.message}`; 
-                }
-            } catch (e) { 
-                resultDiv.style.color = "#ff5555"; 
-                resultDiv.innerText = `❌ Error: ${e.message}`; 
-            }
-            finally { 
-                btn.disabled = false; 
-                btn.innerText = "Create Empty Menu"; 
-            }
-        }
-
-        async function addReactionRole(event) {
-            event.preventDefault();
-            const msgId = document.getElementById('rr_msg_id').value.trim();
-            const emoji = document.getElementById('rr_add_emoji').value.trim();
-            const roleId = document.getElementById('rr_add_roleid').value.trim();
-            const desc = document.getElementById('rr_add_desc').value.trim() || 'No description.';
-            if(!msgId || !emoji || !roleId) { alert("❌ Msg ID, Emoji, and Role ID are required."); return; }
-            try {
-                const result = await safeFetch('/api/admin/add_reaction_role', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, message_id: msgId, emoji, role_id: parseInt(roleId), description: desc })
-                });
-                if(result.status === 'success') { alert(`✅ Role added to menu!`); document.getElementById('rrAddForm').reset(); }
-                else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed: ${e.message}`); }
-        }
-
+        // POLLS
         async function submitPoll(event) {
             event.preventDefault();
             const channelId = document.getElementById('poll_channel').value.trim();
@@ -457,6 +335,7 @@
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
 
+        // ANNOUNCEMENTS
         async function submitAnnouncement(event) {
             event.preventDefault();
             const channelId = document.getElementById('announce_channel').value; const content = document.getElementById('announce_content').value;
