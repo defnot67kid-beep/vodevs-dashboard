@@ -73,16 +73,6 @@
 
         <div class="admin-grid">
             <div class="left-sidebar">
-                <!-- Test Mode Toggle -->
-                <div class="card">
-                    <div class="card-title">🧪 Test Mode (Warns)</div>
-                    <p style="color: #b9bbbe; font-size: 14px; margin-bottom: 10px;">
-                        When enabled, warning embeds will be sent to Test Channel (<code>1528431460535500940</code>) instead of the Live Log Channel.
-                    </p>
-                    <button id="testModeBtn" class="btn btn-primary" style="background: #5865F2;" onclick="toggleTestMode()">🔄 Toggle Test Mode</button>
-                    <div id="testModeResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0; font-size: 14px;"></div>
-                </div>
-
                 <!-- 1. UNBAN TOOL -->
                 <div class="card">
                     <div class="card-title">🔓 Unban User by ID</div>
@@ -210,22 +200,6 @@
             const text = await response.text();
             try { return JSON.parse(text); } 
             catch (e) { throw new Error("Server error: " + text.substring(0, 100)); }
-        }
-
-        // TOGGLE TEST MODE
-        async function toggleTestMode() {
-            const btn = document.getElementById('testModeBtn');
-            const resultDiv = document.getElementById('testModeResult');
-            btn.disabled = true; btn.innerText = "Updating..."; resultDiv.innerText = "";
-            try {
-                const result = await safeFetch('/api/admin/toggle_test_mode', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID })
-                });
-                if(result.status === 'success') { resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Toggle sent to bot!`; }
-                else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`; }
-            } catch (e) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`; }
-            finally { btn.disabled = false; btn.innerText = "🔄 Toggle Test Mode"; }
         }
 
         // OPEN MANAGE USER MODAL
