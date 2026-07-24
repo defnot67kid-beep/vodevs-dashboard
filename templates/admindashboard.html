@@ -17,7 +17,6 @@
         @media (max-width: 1000px) { .admin-grid { grid-template-columns: 1fr; } }
         .card { background: #1e1e2e; border: 1px solid #2f3136; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .card-title { font-weight: 700; color: #b9bbbe; margin-bottom: 15px; font-size: 16px; border-bottom: 1px solid #2f3136; padding-bottom: 10px; }
-        
         .search-bar { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #40444b; background: #202225; color: white; font-size: 16px; outline: none; margin-bottom: 15px; }
         .search-bar:focus { border-color: #5865F2; }
         .user-row { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-bottom: 1px solid #26262e; }
@@ -50,7 +49,6 @@
         .status-idle { background: #faa61a; color: white; }
         .status-dnd { background: #ed4245; color: white; }
         .status-offline { background: #4f545c; color: white; }
-        
         #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1000; }
         #modal-box { background: #1e1e2e; padding: 30px; border-radius: 12px; border: 1px solid #2f3136; width: 400px; max-width: 90%; }
         #modal-box h2 { color: #45ddc0; margin-bottom: 15px; }
@@ -70,6 +68,16 @@
 
         <div class="admin-grid">
             <div class="left-sidebar">
+                <!-- Test Mode Toggle -->
+                <div class="card">
+                    <div class="card-title">🧪 Test Mode (Warns)</div>
+                    <p style="color: #b9bbbe; font-size: 14px; margin-bottom: 10px;">
+                        When enabled, warnings will be sent to <code>1528431460535500940</code> instead of the live channel.
+                    </p>
+                    <button id="testModeBtn" class="btn btn-primary" style="background: #5865F2;" onclick="toggleTestMode()">🔄 Toggle Test Mode</button>
+                    <div id="testModeResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0; font-size: 14px;"></div>
+                </div>
+
                 <!-- 1. UNBAN TOOL -->
                 <div class="card">
                     <div class="card-title">🔓 Unban User by ID</div>
@@ -224,6 +232,29 @@
             }
         }
 
+        // TOGGLE TEST MODE
+        async function toggleTestMode() {
+            const btn = document.getElementById('testModeBtn');
+            const resultDiv = document.getElementById('testModeResult');
+            btn.disabled = true; btn.innerText = "Updating..."; resultDiv.innerText = "";
+
+            try {
+                const result = await safeFetch('/api/admin/toggle_test_mode', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID })
+                });
+                if(result.status === 'success') {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Toggle sent to bot! Check logs.`;
+                } else {
+                    resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`;
+                }
+            } catch (e) {
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`;
+            } finally {
+                btn.disabled = false; btn.innerText = "🔄 Toggle Test Mode";
+            }
+        }
+
         // UNBAN
         async function submitUnban(event) {
             event.preventDefault();
@@ -342,7 +373,6 @@
             document.getElementById('modalUserId').value = userId; document.getElementById('modalAction').value = action;
             document.getElementById('modalTitle').innerText = `${action.toUpperCase()} - ${userName}`;
             const durationGroup = document.getElementById('durationGroup');
-            // Hide duration for kick, ban, and warn
             if (action === 'kick' || action === 'ban' || action === 'warn' || action === 'unban') {
                 durationGroup.style.display = 'none';
             } else {
