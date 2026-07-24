@@ -375,7 +375,7 @@ def web_leaderboard(server_id):
         return f"❌ Internal Server Error: {e}", 500
 
 # ==========================================
-# SECURE ADMIN ROUTES (SESSION BASED - MONGODB)
+# SECURE ADMIN ROUTES
 # ==========================================
 
 @app.route('/admin', methods=['GET'])
@@ -387,7 +387,6 @@ def admin_panel():
     if not admin:
         return redirect(url_for('admin_logout'))
 
-    # FETCH REAL DATA FROM MONGODB CACHE
     MY_GUILD_ID = "1526703518818373743"
     
     cached_data = user_cache_collection.find_one({"guild_id": MY_GUILD_ID})
@@ -431,12 +430,87 @@ def api_mod_action():
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
-    
     data['moderator_name'] = session.get('admin_username', 'Dashboard')
 
     try:
         admin_actions_collection.insert_one(data)
         return jsonify({"status": "success", "message": "Mod action queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/remove_timeout', methods=['POST'])
+def api_remove_timeout():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'mod_action'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+    data['action'] = 'remove_timeout'
+    data['moderator_name'] = session.get('admin_username', 'Dashboard')
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Remove Timeout queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/clear_warnings', methods=['POST'])
+def api_clear_warnings():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'mod_action'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+    data['action'] = 'clear_warnings'
+    data['moderator_name'] = session.get('admin_username', 'Dashboard')
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Clear Warnings queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/delete_warning', methods=['POST'])
+def api_delete_warning():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'mod_action'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+    data['action'] = 'delete_single_warning'
+    data['moderator_name'] = session.get('admin_username', 'Dashboard')
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Delete warning queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/get_user_warnings', methods=['POST'])
+def api_get_user_warnings():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    guild_id = data.get('guild_id')
+    user_id = data.get('user_id')
+
+    if not guild_id or not user_id:
+        return jsonify({"status": "error", "message": "Missing guild_id or user_id"}), 400
+
+    try:
+        user_data = db["warning_users"].find_one({"guild_id": str(guild_id), "user_id": str(user_id)})
+        warnings = user_data.get("warnings", []) if user_data else []
+        # Convert ObjectIds to strings for JSON serialization
+        for w in warnings:
+            if '_id' in w:
+                w['_id'] = str(w['_id'])
+        return jsonify({"status": "success", "warnings": warnings})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
@@ -489,7 +563,7 @@ def api_toggle_test_mode():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ==========================================
-# ADMIN LOGIN & LOGOUT (WITH PASSWORD HASHING)
+# ADMIN LOGIN & LOGOUT
 # ==========================================
 
 @app.route('/admin/login')
@@ -669,7 +743,6 @@ def admin_register(discord_id):
     if existing:
         return "❌ This Discord account already has an admin account created.", 400
 
-    # SECURELY HASH THE PASSWORD BEFORE SAVING
     hashed_password = generate_password_hash(password)
 
     result = admins_collection.insert_one({
