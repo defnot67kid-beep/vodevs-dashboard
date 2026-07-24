@@ -548,8 +548,8 @@ def api_create_reaction_role():
         import time
         time.sleep(1) # Give the bot 1 second to react
         
-        # 3. Look up the newly created menu in the pending collection
-        pending_menu = db["pending_reaction_menus"].find_one(
+        # 3. Look up the newly created menu in the REACTION_MENU_IDS collection
+        pending_menu = db["reaction_menu_ids"].find_one(
             {"guild_id": "1526703518818373743"},
             sort=[('_id', pymongo.DESCENDING)] # Get the newest one
         )
