@@ -388,7 +388,6 @@ def admin_panel():
         return redirect(url_for('admin_logout'))
 
     # FETCH REAL DATA FROM MONGODB CACHE
-    # HARDCODED TO YOUR SPECIFIC GUILD ID SO IT NEVER FAILS AGAIN
     MY_GUILD_ID = "1526703518818373743"
     
     cached_data = user_cache_collection.find_one({"guild_id": MY_GUILD_ID})
@@ -398,7 +397,7 @@ def admin_panel():
                            admin_username=admin['username'],
                            total_members=len(members),
                            members=members,
-                           guild_id=MY_GUILD_ID) # passing the REAL ID to HTML so JS uses it
+                           guild_id=MY_GUILD_ID)
 
 # ==========================================
 # QUEUE ACTIONS TO MONGODB
@@ -410,12 +409,10 @@ def api_create_poll():
 
     data = request.get_json()
     data['type'] = 'poll'
-    # Force the correct guild ID here, ignoring what the HTML sends
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
 
-    # Ensure we save the channel_id to MongoDB
     if 'channel_id' not in data or not data['channel_id']:
         return jsonify({"status": "error", "message": "Channel ID is required!"}), 400
 
@@ -431,12 +428,10 @@ def api_mod_action():
 
     data = request.get_json()
     data['type'] = 'mod_action'
-    # Force the correct guild ID here
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
     
-    # ADD THIS LINE: Pass the logged-in admin's username to the bot
     data['moderator_name'] = session.get('admin_username', 'Dashboard')
 
     try:
@@ -451,7 +446,6 @@ def api_send_announcement():
 
     data = request.get_json()
     data['type'] = 'announcement'
-    # Force the correct guild ID here
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
@@ -468,7 +462,6 @@ def api_create_reaction_role():
 
     data = request.get_json()
     data['type'] = 'reaction_role'
-    # Force the correct guild ID here
     data['guild_id'] = "1526703518818373743"
     data['status'] = 'pending'
     data['created_at'] = datetime.utcnow()
@@ -476,6 +469,22 @@ def api_create_reaction_role():
     try:
         admin_actions_collection.insert_one(data)
         return jsonify({"status": "success", "message": "Reaction Role queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/toggle_test_mode', methods=['POST'])
+def api_toggle_test_mode():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    data = request.get_json()
+    data['type'] = 'toggle_test_mode'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Test mode toggled queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
