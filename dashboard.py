@@ -541,8 +541,25 @@ def api_create_reaction_role():
     data['created_at'] = datetime.utcnow()
 
     try:
+        # 1. Insert the action into the queue
         admin_actions_collection.insert_one(data)
-        return jsonify({"status": "success", "message": "Reaction Role queued for bot!"})
+        
+        # 2. Wait a tiny moment for the bot to process it
+        import time
+        time.sleep(1) # Give the bot 1 second to react
+        
+        # 3. Look up the newly created menu in the pending collection
+        pending_menu = db["pending_reaction_menus"].find_one(
+            {"guild_id": "1526703518818373743"},
+            sort=[('_id', pymongo.DESCENDING)] # Get the newest one
+        )
+        
+        # 4. Return the success + the real ID
+        if pending_menu:
+            return jsonify({"status": "success", "message_id": pending_menu["message_id"]})
+        else:
+            return jsonify({"status": "success", "message_id": "Bot is processing, check Discord!"})
+            
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
