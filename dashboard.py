@@ -474,42 +474,24 @@ def api_upload_welcome_font():
 def api_preview_welcome_card():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
     
-    # Generate a preview using the admin's own avatar, but only if they're in the guild
     guild_id = "1526703518818373743"
-    guild = None
-    # Note: Flask cannot access Discord guilds directly. 
-    # We call the bot's welcome cog through a temporary queue to generate a preview, 
-    # or we simulate the image generation here.
     
-    # For simplicity, we will request the bot to generate the preview via a high-priority queue.
-    from cogs.welcome import WelcomeSystem
-    # Note: In a real environment, you would call the welcome cog's method directly or use a REST API.
-    # Since we don't have direct access to the bot instance here, we simulate a generation.
-    
-    # Create a dummy image with the saved config for preview
-    bg_filename = None
-    font_filename = None
-    welcome_text = "Welcome to VoDevs!"
-    circle_color = "#d1a3ff"
-    name_color = "#a1b0d6"
-    text_color = "#a1b0d6"
-    
-    # Load the welcome config from the JSON file
+    # Load config from MongoDB directly (so we don't need the bot's JSON file)
     import json
-    if os.path.exists("welcome_data.json"):
-        with open("welcome_data.json", "r") as f:
-            data = json.load(f)
-            guild_config = data.get("settings", {}).get(guild_id, {})
-            bg_filename = guild_config.get("welcome_background")
-            font_filename = guild_config.get("custom_font")
-            welcome_text = guild_config.get("welcome_text", "Welcome to VoDevs!")
-            circle_color = guild_config.get("circle_color", "#d1a3ff")
-            name_color = guild_config.get("user_name_color", "#a1b0d6")
-            text_color = guild_config.get("welcome_text_color", "#a1b0d6")
+    config = {}
+    try:
+        # Try to load from the dashboard's cached welcome_data.json
+        if os.path.exists("welcome_data.json"):
+            with open("welcome_data.json", "r") as f:
+                data = json.load(f)
+                config = data.get("settings", {}).get(guild_id, {})
+    except:
+        pass
     
     canvas_width, canvas_height = 800, 350
     
     # Load Background
+    bg_filename = config.get("welcome_background", None)
     if bg_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)):
         bg_img = Image.open(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)).convert("RGB").resize((canvas_width, canvas_height))
     else:
@@ -518,14 +500,30 @@ def api_preview_welcome_card():
     img = bg_img.copy()
     draw = ImageDraw.Draw(img)
     
+    # Colors
+    def hex_to_rgb(hex_code):
+        hex_code = hex_code.lstrip('#')
+        return tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+    
+    circle_color = hex_to_rgb(config.get("circle_color", "#d1a3ff"))
+    name_color = hex_to_rgb(config.get("user_name_color", "#a1b0d6"))
+    text_color = hex_to_rgb(config.get("welcome_text_color", "#a1b0d6"))
+    
+    avatar_size = 180
+    circle_x = (canvas_width - avatar_size) // 2
+    circle_y = 30
+    draw.ellipse([circle_x - 10, circle_y - 10, circle_x + avatar_size + 10, circle_y + avatar_size + 10], fill=circle_color)
+    
     # Load Fonts
     font_large = ImageFont.load_default()
     font_medium = ImageFont.load_default()
     
+    font_filename = config.get("custom_font", None)
     if font_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, font_filename)):
         try:
-            font_large = ImageFont.truetype(os.path.join(WELCOME_ASSETS_FOLDER, font_filename), 46)
-            font_medium = ImageFont.truetype(os.path.join(WELCOME_ASSETS_FOLDER, font_filename), 36)
+            font_path = os.path.join(WELCOME_ASSETS_FOLDER, font_filename)
+            font_large = ImageFont.truetype(font_path, 46)
+            font_medium = ImageFont.truetype(font_path, 36)
         except:
             pass
     else:
@@ -535,33 +533,12 @@ def api_preview_welcome_card():
         except:
             pass
 
-    # Colors
-    def hex_to_rgb(hex_code):
-        hex_code = hex_code.lstrip('#')
-        return tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+    # Draw username and welcome text
+    username = session.get('discord_name', 'Preview User')
+    welcome_text = config.get("welcome_text", "Welcome to VoDevs!")
     
-    circle_rgb = hex_to_rgb(circle_color)
-    name_rgb = hex_to_rgb(name_color)
-    text_rgb = hex_to_rgb(text_color)
-    
-    avatar_size = 180
-    circle_x = (canvas_width - avatar_size) // 2
-    circle_y = 30
-    draw.ellipse([circle_x - 10, circle_y - 10, circle_x + avatar_size + 10, circle_y + avatar_size + 10], fill=circle_rgb)
-    
-    # Try to fetch admin's avatar
-    try:
-        user_id = session.get('user_id')
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{session.get('avatar_hash', 'a_123456')}.png"
-        # Note: We cannot guarantee the avatar_hash is available in Flask session.
-        # We will just draw a placeholder circle.
-    except:
-        pass
-    
-    # Draw username (use the session username)
-    username = session.get('discord_name', 'User')
-    draw.text((canvas_width / 2, circle_y + avatar_size + 20), username, fill=name_rgb, font=font_large, anchor="mm")
-    draw.text((canvas_width / 2, circle_y + avatar_size + 80), welcome_text, fill=text_rgb, font=font_medium, anchor="mm")
+    draw.text((canvas_width / 2, circle_y + avatar_size + 20), username, fill=name_color, font=font_large, anchor="mm")
+    draw.text((canvas_width / 2, circle_y + avatar_size + 80), welcome_text, fill=text_color, font=font_medium, anchor="mm")
     
     img_io = io.BytesIO()
     img.save(img_io, 'PNG')
