@@ -60,6 +60,11 @@ if not os.path.exists(USER_BG_FOLDER):
 if not os.path.exists(FONTS_FOLDER):
     os.makedirs(FONTS_FOLDER)
 
+# Welcome Assets Folder
+WELCOME_ASSETS_FOLDER = "welcome_assets/"
+if not os.path.exists(WELCOME_ASSETS_FOLDER):
+    os.makedirs(WELCOME_ASSETS_FOLDER)
+
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, 'r') as f:
         configs = json.load(f)
@@ -397,6 +402,171 @@ def admin_panel():
                            total_members=len(members),
                            members=members,
                            guild_id=MY_GUILD_ID)
+
+# ==========================================
+# WELCOME BACKGROUND & FONT UPLOADS
+# ==========================================
+
+def save_welcome_file(file_storage, allowed_extensions):
+    """Helper to validate and save welcome background/font files."""
+    if file_storage.filename == '':
+        return None, "No file selected."
+    ext = file_storage.filename.split('.')[-1].lower()
+    if ext not in allowed_extensions:
+        return None, f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+    
+    filename = f"{datetime.utcnow().timestamp()}.{ext}"
+    filepath = os.path.join(WELCOME_ASSETS_FOLDER, filename)
+    file_storage.save(filepath)
+    return filename, None
+
+@app.route('/api/admin/upload_welcome_bg', methods=['POST'])
+def api_upload_welcome_bg():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    if 'bg_image' not in request.files:
+        return jsonify({"status": "error", "message": "No file provided"}), 400
+    
+    file = request.files['bg_image']
+    filename, error = save_welcome_file(file, ['png', 'jpg', 'jpeg', 'gif'])
+    
+    if error:
+        return jsonify({"status": "error", "message": error}), 400
+
+    action = {
+        "type": "update_welcome_asset",
+        "guild_id": "1526703518818373743",
+        "asset_type": "background",
+        "filename": filename,
+        "status": "pending",
+        "created_at": datetime.utcnow()
+    }
+    admin_actions_collection.insert_one(action)
+
+    return jsonify({"status": "success", "message": "Background uploaded! Bot will apply it on the next join."})
+
+@app.route('/api/admin/upload_welcome_font', methods=['POST'])
+def api_upload_welcome_font():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    if 'font_file' not in request.files:
+        return jsonify({"status": "error", "message": "No file provided"}), 400
+    
+    file = request.files['font_file']
+    filename, error = save_welcome_file(file, ['ttf'])
+    
+    if error:
+        return jsonify({"status": "error", "message": error}), 400
+
+    action = {
+        "type": "update_welcome_asset",
+        "guild_id": "1526703518818373743",
+        "asset_type": "font",
+        "filename": filename,
+        "status": "pending",
+        "created_at": datetime.utcnow()
+    }
+    admin_actions_collection.insert_one(action)
+
+    return jsonify({"status": "success", "message": "Font uploaded! Bot will apply it on the next join."})
+
+@app.route('/api/admin/preview_welcome_card')
+def api_preview_welcome_card():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+    
+    # Generate a preview using the admin's own avatar, but only if they're in the guild
+    guild_id = "1526703518818373743"
+    guild = None
+    # Note: Flask cannot access Discord guilds directly. 
+    # We call the bot's welcome cog through a temporary queue to generate a preview, 
+    # or we simulate the image generation here.
+    
+    # For simplicity, we will request the bot to generate the preview via a high-priority queue.
+    from cogs.welcome import WelcomeSystem
+    # Note: In a real environment, you would call the welcome cog's method directly or use a REST API.
+    # Since we don't have direct access to the bot instance here, we simulate a generation.
+    
+    # Create a dummy image with the saved config for preview
+    bg_filename = None
+    font_filename = None
+    welcome_text = "Welcome to VoDevs!"
+    circle_color = "#d1a3ff"
+    name_color = "#a1b0d6"
+    text_color = "#a1b0d6"
+    
+    # Load the welcome config from the JSON file
+    import json
+    if os.path.exists("welcome_data.json"):
+        with open("welcome_data.json", "r") as f:
+            data = json.load(f)
+            guild_config = data.get("settings", {}).get(guild_id, {})
+            bg_filename = guild_config.get("welcome_background")
+            font_filename = guild_config.get("custom_font")
+            welcome_text = guild_config.get("welcome_text", "Welcome to VoDevs!")
+            circle_color = guild_config.get("circle_color", "#d1a3ff")
+            name_color = guild_config.get("user_name_color", "#a1b0d6")
+            text_color = guild_config.get("welcome_text_color", "#a1b0d6")
+    
+    canvas_width, canvas_height = 800, 350
+    
+    # Load Background
+    if bg_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)):
+        bg_img = Image.open(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)).convert("RGB").resize((canvas_width, canvas_height))
+    else:
+        bg_img = Image.new('RGB', (canvas_width, canvas_height), color=(54, 57, 63))
+    
+    img = bg_img.copy()
+    draw = ImageDraw.Draw(img)
+    
+    # Load Fonts
+    font_large = ImageFont.load_default()
+    font_medium = ImageFont.load_default()
+    
+    if font_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, font_filename)):
+        try:
+            font_large = ImageFont.truetype(os.path.join(WELCOME_ASSETS_FOLDER, font_filename), 46)
+            font_medium = ImageFont.truetype(os.path.join(WELCOME_ASSETS_FOLDER, font_filename), 36)
+        except:
+            pass
+    else:
+        try:
+            font_large = ImageFont.truetype("Inter-SemiBold.ttf", 46)
+            font_medium = ImageFont.truetype("Inter-SemiBold.ttf", 36)
+        except:
+            pass
+
+    # Colors
+    def hex_to_rgb(hex_code):
+        hex_code = hex_code.lstrip('#')
+        return tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+    
+    circle_rgb = hex_to_rgb(circle_color)
+    name_rgb = hex_to_rgb(name_color)
+    text_rgb = hex_to_rgb(text_color)
+    
+    avatar_size = 180
+    circle_x = (canvas_width - avatar_size) // 2
+    circle_y = 30
+    draw.ellipse([circle_x - 10, circle_y - 10, circle_x + avatar_size + 10, circle_y + avatar_size + 10], fill=circle_rgb)
+    
+    # Try to fetch admin's avatar
+    try:
+        user_id = session.get('user_id')
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{session.get('avatar_hash', 'a_123456')}.png"
+        # Note: We cannot guarantee the avatar_hash is available in Flask session.
+        # We will just draw a placeholder circle.
+    except:
+        pass
+    
+    # Draw username (use the session username)
+    username = session.get('discord_name', 'User')
+    draw.text((canvas_width / 2, circle_y + avatar_size + 20), username, fill=name_rgb, font=font_large, anchor="mm")
+    draw.text((canvas_width / 2, circle_y + avatar_size + 80), welcome_text, fill=text_rgb, font=font_medium, anchor="mm")
+    
+    img_io = io.BytesIO()
+    img.save(img_io, 'PNG')
+    img_io.seek(0)
+    return send_file(img_io, mimetype='image/png')
 
 # ==========================================
 # QUEUE ACTIONS TO MONGODB
