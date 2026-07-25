@@ -546,6 +546,22 @@ def api_create_reaction_role():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/admin/save_welcome_config', methods=['POST'])
+def api_save_welcome_config():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'save_welcome_config'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Welcome config saved for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/admin/toggle_test_mode', methods=['POST'])
 def api_toggle_test_mode():
     if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
