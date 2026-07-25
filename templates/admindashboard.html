@@ -73,6 +73,32 @@
 
         <div class="admin-grid">
             <div class="left-sidebar">
+                
+                <!-- NEW: WELCOME IMAGE CONFIGURATION -->
+                <div class="card">
+                    <div class="card-title">🖼️ Welcome Image Settings</div>
+                    <form id="welcomeForm" onsubmit="saveWelcomeConfig(event)">
+                        <div class="form-group">
+                            <label>Welcome Text (e.g. "Welcome to VoDevs!")</label>
+                            <input type="text" id="welcome_text" class="form-control" value="Welcome to VoDevs!" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Avatar Border Color</label>
+                            <input type="color" id="welcome_circle_color" class="form-control" value="#d1a3ff">
+                        </div>
+                        <div class="form-group">
+                            <label>Username Color</label>
+                            <input type="color" id="welcome_name_color" class="form-control" value="#a1b0d6">
+                        </div>
+                        <div class="form-group">
+                            <label>Welcome Message Color</label>
+                            <input type="color" id="welcome_msg_color" class="form-control" value="#a1b0d6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="background: #3ba55c;">Save Welcome Settings</button>
+                        <div id="welcomeResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
+                    </form>
+                </div>
+
                 <!-- 1. UNBAN TOOL -->
                 <div class="card">
                     <div class="card-title">🔓 Unban User by ID</div>
@@ -202,6 +228,57 @@
             catch (e) { throw new Error("Server error: " + text.substring(0, 100)); }
         }
 
+        // SAVE WELCOME CONFIG
+        async function saveWelcomeConfig(event) {
+            event.preventDefault();
+            const btn = document.querySelector('#welcomeForm .btn-primary');
+            const resultDiv = document.getElementById('welcomeResult');
+            btn.disabled = true; btn.innerText = "Saving..."; resultDiv.innerText = "";
+
+            const welcome_text = document.getElementById('welcome_text').value;
+            const welcome_circle_color = document.getElementById('welcome_circle_color').value;
+            const welcome_name_color = document.getElementById('welcome_name_color').value;
+            const welcome_msg_color = document.getElementById('welcome_msg_color').value;
+
+            try {
+                const result = await safeFetch('/api/admin/save_welcome_config', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        guild_id: GUILD_ID, 
+                        welcome_text, 
+                        welcome_circle_color, 
+                        welcome_name_color, 
+                        welcome_msg_color 
+                    })
+                });
+                if(result.status === 'success') {
+                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Config saved! New members will see your design.`;
+                } else {
+                    resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`;
+                }
+            } catch (e) {
+                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Connection Error: ${e}`;
+            } finally {
+                btn.disabled = false; btn.innerText = "Save Welcome Settings";
+            }
+        }
+
+        // UNBAN
+        async function submitUnban(event) {
+            event.preventDefault();
+            const userId = document.getElementById('unban_user_id').value.trim();
+            const reason = document.getElementById('unban_reason').value.trim() || 'No reason provided.';
+            if(!userId) { alert("❌ Please provide a User ID."); return; }
+            try {
+                const result = await safeFetch('/api/admin/mod_action', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, action: 'unban', reason: reason })
+                });
+                if(result.status === 'success') { alert(`✅ Unban queued for bot!`); document.getElementById('unbanForm').reset(); }
+                else { alert(`❌ Error: ${result.message}`); }
+            } catch (e) { alert(`❌ Failed: ${e.message}`); }
+        }
+
         // OPEN MANAGE USER MODAL
         async function openManageUser(userId, userName) {
             CURRENT_USER_ID = userId;
@@ -212,7 +289,6 @@
             const container = document.getElementById('warningsContainer');
             container.innerHTML = '<p style="color: #b9bbbe; text-align: center;">Loading warnings...</p>';
             
-            // Fetch warning data from MongoDB via the bot
             try {
                 const result = await safeFetch('/api/admin/get_user_warnings', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -266,22 +342,6 @@
                     body: JSON.stringify({ guild_id: GUILD_ID, user_id: CURRENT_USER_ID, warning_id: warningId })
                 });
                 if(result.status === 'success') { alert(`✅ Warning deleted!`); openManageUser(CURRENT_USER_ID, CURRENT_USER_NAME); }
-                else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed: ${e.message}`); }
-        }
-
-        // UNBAN (From sidebar)
-        async function submitUnban(event) {
-            event.preventDefault();
-            const userId = document.getElementById('unban_user_id').value.trim();
-            const reason = document.getElementById('unban_reason').value.trim() || 'No reason provided.';
-            if(!userId) { alert("❌ Please provide a User ID."); return; }
-            try {
-                const result = await safeFetch('/api/admin/mod_action', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, action: 'unban', reason: reason })
-                });
-                if(result.status === 'success') { alert(`✅ Unban queued for bot!`); document.getElementById('unbanForm').reset(); }
                 else { alert(`❌ Error: ${result.message}`); }
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
