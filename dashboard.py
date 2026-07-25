@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_file, redirect,
 from flask_basicauth import BasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 import pymongo
+import gridfs  # <--- NEW IMPORT
 import os
 import json
 import io
@@ -30,7 +31,7 @@ CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://vodevs-dashboard-production.up.railway.app")
 
 # ==========================================
-# MONGODB SETUP
+# MONGODB SETUP (WITH GRIDFS)
 # ==========================================
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
@@ -38,6 +39,8 @@ if not MONGO_URI:
 else:
     client = pymongo.MongoClient(MONGO_URI)
     db = client["vodevs_bot_data"]
+    fs = gridfs.GridFS(db)  # <--- GridFS for file storage
+    
     levels_collection = db["levels"]
     invites_collection = db["admin_invites"]
     admins_collection = db["admins"]
@@ -59,11 +62,6 @@ if not os.path.exists(USER_BG_FOLDER):
     os.makedirs(USER_BG_FOLDER)
 if not os.path.exists(FONTS_FOLDER):
     os.makedirs(FONTS_FOLDER)
-
-# Welcome Assets Folder
-WELCOME_ASSETS_FOLDER = "welcome_assets/"
-if not os.path.exists(WELCOME_ASSETS_FOLDER):
-    os.makedirs(WELCOME_ASSETS_FOLDER)
 
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, 'r') as f:
@@ -404,21 +402,8 @@ def admin_panel():
                            guild_id=MY_GUILD_ID)
 
 # ==========================================
-# WELCOME BACKGROUND & FONT UPLOADS
+# WELCOME BACKGROUND & FONT UPLOADS (USING MONGODB GRIDFS)
 # ==========================================
-
-def save_welcome_file(file_storage, allowed_extensions):
-    """Helper to validate and save welcome background/font files."""
-    if file_storage.filename == '':
-        return None, "No file selected."
-    ext = file_storage.filename.split('.')[-1].lower()
-    if ext not in allowed_extensions:
-        return None, f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
-    
-    filename = f"{datetime.utcnow().timestamp()}.{ext}"
-    filepath = os.path.join(WELCOME_ASSETS_FOLDER, filename)
-    file_storage.save(filepath)
-    return filename, None
 
 @app.route('/api/admin/upload_welcome_bg', methods=['POST'])
 def api_upload_welcome_bg():
@@ -428,22 +413,23 @@ def api_upload_welcome_bg():
         return jsonify({"status": "error", "message": "No file provided"}), 400
     
     file = request.files['bg_image']
-    filename, error = save_welcome_file(file, ['png', 'jpg', 'jpeg', 'gif'])
     
-    if error:
-        return jsonify({"status": "error", "message": error}), 400
-
+    # Save directly to MongoDB GridFS
+    file_id = fs.put(file, filename=file.filename, content_type=file.mimetype)
+    
+    # Queue the update for the bot
     action = {
         "type": "update_welcome_asset",
         "guild_id": "1526703518818373743",
         "asset_type": "background",
-        "filename": filename,
+        "file_id": str(file_id),
+        "filename": file.filename,
         "status": "pending",
         "created_at": datetime.utcnow()
     }
     admin_actions_collection.insert_one(action)
 
-    return jsonify({"status": "success", "message": "Background uploaded! Bot will apply it on the next join."})
+    return jsonify({"status": "success", "message": "Background uploaded to MongoDB! Bot will apply it on the next join."})
 
 @app.route('/api/admin/upload_welcome_font', methods=['POST'])
 def api_upload_welcome_font():
@@ -453,22 +439,23 @@ def api_upload_welcome_font():
         return jsonify({"status": "error", "message": "No file provided"}), 400
     
     file = request.files['font_file']
-    filename, error = save_welcome_file(file, ['ttf'])
     
-    if error:
-        return jsonify({"status": "error", "message": error}), 400
-
+    # Save directly to MongoDB GridFS
+    file_id = fs.put(file, filename=file.filename, content_type=file.mimetype)
+    
+    # Queue the update for the bot
     action = {
         "type": "update_welcome_asset",
         "guild_id": "1526703518818373743",
         "asset_type": "font",
-        "filename": filename,
+        "file_id": str(file_id),
+        "filename": file.filename,
         "status": "pending",
         "created_at": datetime.utcnow()
     }
     admin_actions_collection.insert_one(action)
 
-    return jsonify({"status": "success", "message": "Font uploaded! Bot will apply it on the next join."})
+    return jsonify({"status": "success", "message": "Font uploaded to MongoDB! Bot will apply it on the next join."})
 
 @app.route('/api/admin/preview_welcome_card')
 def api_preview_welcome_card():
@@ -476,11 +463,10 @@ def api_preview_welcome_card():
     
     guild_id = "1526703518818373743"
     
-    # Load config from MongoDB directly (so we don't need the bot's JSON file)
+    # Load config from MongoDB directly
     import json
     config = {}
     try:
-        # Try to load from the dashboard's cached welcome_data.json
         if os.path.exists("welcome_data.json"):
             with open("welcome_data.json", "r") as f:
                 data = json.load(f)
@@ -490,13 +476,16 @@ def api_preview_welcome_card():
     
     canvas_width, canvas_height = 800, 350
     
-    # Load Background
-    bg_filename = config.get("welcome_background", None)
-    if bg_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)):
-        bg_img = Image.open(os.path.join(WELCOME_ASSETS_FOLDER, bg_filename)).convert("RGB").resize((canvas_width, canvas_height))
-    else:
-        bg_img = Image.new('RGB', (canvas_width, canvas_height), color=(54, 57, 63))
-    
+    # Load Background from MongoDB GridFS
+    bg_img = Image.new('RGB', (canvas_width, canvas_height), color=(54, 57, 63))
+    bg_file_id = config.get("welcome_background", None)
+    if bg_file_id:
+        try:
+            bg_data = fs.get(ObjectId(bg_file_id)).read()
+            bg_img = Image.open(io.BytesIO(bg_data)).convert("RGB").resize((canvas_width, canvas_height))
+        except:
+            pass
+
     img = bg_img.copy()
     draw = ImageDraw.Draw(img)
     
@@ -514,16 +503,16 @@ def api_preview_welcome_card():
     circle_y = 30
     draw.ellipse([circle_x - 10, circle_y - 10, circle_x + avatar_size + 10, circle_y + avatar_size + 10], fill=circle_color)
     
-    # Load Fonts
+    # Load Fonts from MongoDB GridFS
     font_large = ImageFont.load_default()
     font_medium = ImageFont.load_default()
     
-    font_filename = config.get("custom_font", None)
-    if font_filename and os.path.exists(os.path.join(WELCOME_ASSETS_FOLDER, font_filename)):
+    font_file_id = config.get("custom_font", None)
+    if font_file_id:
         try:
-            font_path = os.path.join(WELCOME_ASSETS_FOLDER, font_filename)
-            font_large = ImageFont.truetype(font_path, 46)
-            font_medium = ImageFont.truetype(font_path, 36)
+            font_data = fs.get(ObjectId(font_file_id)).read()
+            font_large = ImageFont.truetype(io.BytesIO(font_data), 46)
+            font_medium = ImageFont.truetype(io.BytesIO(font_data), 36)
         except:
             pass
     else:
