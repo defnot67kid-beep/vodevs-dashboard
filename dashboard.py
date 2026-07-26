@@ -45,6 +45,7 @@ else:
     owner_secrets_collection = db["owner_secrets"]
     user_cache_collection = db["user_cache"]
     admin_actions_collection = db["admin_actions"]
+    ban_list_cache = db["ban_list_cache"] # Cache for banned users
 
 # ==========================================
 # CONFIGURATION
@@ -575,6 +576,51 @@ def api_toggle_test_mode():
     try:
         admin_actions_collection.insert_one(data)
         return jsonify({"status": "success", "message": "Test mode toggled queued for bot!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ==========================================
+# UNBAN SYSTEM ROUTES
+# ==========================================
+
+@app.route('/api/admin/get_ban_list', methods=['POST'])
+def api_get_ban_list():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'get_ban_list'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['created_at'] = datetime.utcnow()
+
+    try:
+        admin_actions_collection.insert_one(data)
+        # Check cache immediately
+        import time
+        time.sleep(1.5)
+        ban_list_cache_data = ban_list_cache.find_one({"guild_id": "1526703518818373743"})
+        if ban_list_cache_data:
+            return jsonify({"status": "success", "bans": ban_list_cache_data.get("bans", [])})
+        else:
+            return jsonify({"status": "pending", "message": "Bot is fetching bans..."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/admin/unban_by_id', methods=['POST'])
+def api_unban_by_id():
+    if 'admin_id' not in session: return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    data = request.get_json()
+    data['type'] = 'mod_action'
+    data['guild_id'] = "1526703518818373743"
+    data['status'] = 'pending'
+    data['action'] = 'unban'
+    data['created_at'] = datetime.utcnow()
+    data['moderator_name'] = session.get('admin_username', 'Dashboard')
+
+    try:
+        admin_actions_collection.insert_one(data)
+        return jsonify({"status": "success", "message": "Unban queued for bot!"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
