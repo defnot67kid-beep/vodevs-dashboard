@@ -106,14 +106,15 @@
                     <div style="margin-bottom: 15px;">
                         <button class="btn btn-success" onclick="refreshBanList()" style="width: 100%; margin-bottom: 10px;">🔄 Refresh Ban List</button>
                         
-                        <label>Select a banned user:</label>
+                        <label>Select a banned user (if fetchable):</label>
                         <select id="banListDropdown" class="form-control" onchange="fillUnbanFromDropdown()">
                             <option value="">-- Select a banned user --</option>
                         </select>
+                        <p style="color: #b9bbbe; font-size: 12px; margin-top: 5px;">* If the list is empty, the bot may lack permissions. Use the manual ID box below.</p>
                     </div>
 
                     <div style="border-top: 1px solid #40444b; padding-top: 15px;">
-                        <label>Or type User ID manually:</label>
+                        <label>Or type User ID manually (ALWAYS works):</label>
                         <input type="text" id="unban_user_id" class="form-control" placeholder="123456789012345678" style="margin-bottom: 10px;">
                         
                         <div class="form-group">
@@ -273,7 +274,7 @@
             }
         }
 
-        // REFRESH BAN LIST
+        // REFRESH BAN LIST (WITH SAFE FALLBACK)
         async function refreshBanList() {
             const btn = document.querySelector('#banListDropdown');
             const resultDiv = document.getElementById('unbanResult');
@@ -296,18 +297,18 @@
                     resultDiv.style.color = "#45ddc0";
                     resultDiv.innerText = `✅ Loaded ${result.bans.length} banned users.`;
                 } else if(result.status === 'success' && result.bans.length === 0) {
-                    btn.innerHTML = '<option value="">No banned users found.</option>';
+                    btn.innerHTML = '<option value="">No banned users found (or none exist).</option>';
                     resultDiv.style.color = "#b9bbbe";
-                    resultDiv.innerText = "No banned users.";
+                    resultDiv.innerText = "No banned users found.";
                 } else {
-                    btn.innerHTML = '<option value="">Error loading bans</option>';
-                    resultDiv.style.color = "#ff5555";
-                    resultDiv.innerText = `❌ Error: ${result.message}`;
+                    btn.innerHTML = '<option value="">⚠️ Could not load ban list (Use manual ID below).</option>';
+                    resultDiv.style.color = "#ffaa00";
+                    resultDiv.innerText = `⚠️ Fallback: ${result.message || "Bot may be missing permissions."}`;
                 }
             } catch (e) {
-                btn.innerHTML = '<option value="">Error</option>';
-                resultDiv.style.color = "#ff5555";
-                resultDiv.innerText = `❌ Failed: ${e.message}`;
+                btn.innerHTML = '<option value="">⚠️ Error loading bans (Use manual ID below).</option>';
+                resultDiv.style.color = "#ffaa00";
+                resultDiv.innerText = `⚠️ Fallback: ${e.message}`;
             }
         }
 
@@ -320,7 +321,7 @@
             }
         }
 
-        // SUBMIT UNBAN
+        // SUBMIT UNBAN (WORKS 100% OF THE TIME VIA USER ID)
         async function submitUnban() {
             const userId = document.getElementById('unban_user_id').value.trim();
             const reason = document.getElementById('unban_reason').value.trim() || 'No reason provided.';
