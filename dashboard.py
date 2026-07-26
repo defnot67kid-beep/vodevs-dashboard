@@ -45,7 +45,7 @@ else:
     owner_secrets_collection = db["owner_secrets"]
     user_cache_collection = db["user_cache"]
     admin_actions_collection = db["admin_actions"]
-    ban_list_cache = db["ban_list_cache"] # Cache for banned users
+    ban_list_cache = db["ban_list_cache"]
 
 # ==========================================
 # CONFIGURATION
