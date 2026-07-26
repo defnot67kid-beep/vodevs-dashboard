@@ -59,33 +59,6 @@
         .btn-cancel { background: #4f545c; padding: 10px 20px; border: none; border-radius: 6px; color: white; cursor: pointer; }
         .warn-item { background: #2f3136; padding: 10px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .warn-item small { color: #b9bbbe; }
-
-        /* Upload Zone Styles */
-        .upload-zone {
-            border: 2px dashed #40444b;
-            padding: 30px;
-            text-align: center;
-            border-radius: 10px;
-            margin-top: 10px;
-            transition: all 0.3s;
-            cursor: pointer;
-            position: relative;
-        }
-        .upload-zone.dragover {
-            border-color: #5865F2;
-            background: rgba(88, 101, 242, 0.1);
-            transform: scale(1.02);
-        }
-        .upload-zone input {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            opacity: 0;
-            cursor: pointer;
-        }
-        .upload-zone p { margin: 0; color: #b9bbbe; }
     </style>
 </head>
 <body>
@@ -126,55 +99,30 @@
                     </form>
                 </div>
 
-                <!-- 🖼️ UPLOAD BACKGROUND -->
+                <!-- 1. UNBAN TOOL & BAN LIST -->
                 <div class="card">
-                    <div class="card-title">🖼️ Upload Background Image</div>
-                    <p style="color: #b9bbbe; font-size: 14px; margin-bottom: 10px;">Upload a 800x350 background image (PNG/JPG/GIF).</p>
-                    <div class="upload-zone" id="bgDropZone">
-                        <p>📁 Drag & Drop or Click to Upload</p>
-                        <form id="bgUploadForm" method="POST" action="/api/admin/upload_welcome_bg" enctype="multipart/form-data" onsubmit="uploadWelcomeAsset(event, 'bg')">
-                            <input type="file" name="bg_image" accept="image/png,image/jpeg,image/gif" id="bgInput">
-                        </form>
+                    <div class="card-title">🔓 Unban User</div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-success" onclick="refreshBanList()" style="width: 100%; margin-bottom: 10px;">🔄 Refresh Ban List</button>
+                        
+                        <label>Select a banned user:</label>
+                        <select id="banListDropdown" class="form-control" onchange="fillUnbanFromDropdown()">
+                            <option value="">-- Select a banned user --</option>
+                        </select>
                     </div>
-                    <div id="bgResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
-                </div>
 
-                <!-- 🖼️ UPLOAD FONT -->
-                <div class="card">
-                    <div class="card-title">🔤 Upload Font (.ttf)</div>
-                    <p style="color: #b9bbbe; font-size: 14px; margin-bottom: 10px;">Upload a .ttf font file to customize the card text.</p>
-                    <div class="upload-zone" id="fontDropZone">
-                        <p>📁 Drag & Drop or Click to Upload</p>
-                        <form id="fontUploadForm" method="POST" action="/api/admin/upload_welcome_font" enctype="multipart/form-data" onsubmit="uploadWelcomeAsset(event, 'font')">
-                            <input type="file" name="font_file" accept=".ttf" id="fontInput">
-                        </form>
-                    </div>
-                    <div id="fontResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
-                </div>
-
-                <!-- 👁️ PREVIEW CARD -->
-                <div class="card">
-                    <div class="card-title">👁️ Preview Card</div>
-                    <button class="btn btn-primary" onclick="previewWelcomeCard()" style="background: #5865F2;">🔄 Generate Preview</button>
-                    <div id="previewContainer" style="margin-top: 15px; display: none;">
-                        <img id="previewImage" src="" style="width: 100%; border-radius: 8px; border: 1px solid #2f3136;">
-                    </div>
-                </div>
-
-                <!-- 1. UNBAN TOOL -->
-                <div class="card">
-                    <div class="card-title">🔓 Unban User by ID</div>
-                    <form id="unbanForm" onsubmit="submitUnban(event)">
-                        <div class="form-group">
-                            <label>User ID</label>
-                            <input type="text" id="unban_user_id" class="form-control" required placeholder="123456789012345678">
-                        </div>
+                    <div style="border-top: 1px solid #40444b; padding-top: 15px;">
+                        <label>Or type User ID manually:</label>
+                        <input type="text" id="unban_user_id" class="form-control" placeholder="123456789012345678" style="margin-bottom: 10px;">
+                        
                         <div class="form-group">
                             <label>Reason</label>
                             <input type="text" id="unban_reason" class="form-control" placeholder="Unban reason...">
                         </div>
-                        <button type="submit" class="btn btn-success">Unban User</button>
-                    </form>
+                        <button type="button" class="btn btn-success" onclick="submitUnban()">Unban User</button>
+                        <div id="unbanResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
+                    </div>
                 </div>
 
                 <!-- 2. CREATE POLL -->
@@ -218,32 +166,6 @@
                         <button type="submit" class="btn btn-primary">Send Announcement</button>
                     </form>
                 </div>
-
-                <!-- 4. REACTION ROLES (STEP 1: CREATE MENU) -->
-                <div class="card">
-                    <div class="card-title">🔘 Step 1: Create Role Menu</div>
-                    <form id="rrCreateForm" onsubmit="createReactionRole(event)">
-                        <div class="form-group"><label>Channel ID</label><input type="text" id="rr_channel_id" class="form-control" required></div>
-                        <div class="form-group"><label>Title</label><input type="text" id="rr_title" class="form-control" required></div>
-                        <div class="form-group"><label>Description</label><textarea id="rr_description" class="form-control"></textarea></div>
-                        <div class="form-group"><label>Embed Color</label><input type="color" id="rr_color" class="form-control" value="#5865F2"></div>
-                        <button type="submit" class="btn btn-success" id="rrSubmitBtn">Create Empty Menu</button>
-                        <div id="rrResult" style="margin-top: 10px; font-weight: bold; color: #45ddc0;"></div>
-                    </form>
-                </div>
-
-                <!-- 5. REACTION ROLES (STEP 2: ADD TO MENU) -->
-                <div class="card">
-                    <div class="card-title">➕ Step 2: Add Role to Menu</div>
-                    <form id="rrAddForm" onsubmit="addReactionRole(event)">
-                        <div class="form-group"><label>Message ID</label><input type="text" id="rr_msg_id" class="form-control" required placeholder="ID of the menu message"></div>
-                        <div class="form-group"><label>Emoji</label><input type="text" id="rr_add_emoji" class="form-control" required placeholder="✅"></div>
-                        <div class="form-group"><label>Role ID</label><input type="text" id="rr_add_roleid" class="form-control" required placeholder="123456789"></div>
-                        <div class="form-group"><label>Description</label><input type="text" id="rr_add_desc" class="form-control" placeholder="Access to..."></div>
-                        <button type="submit" class="btn btn-warning">Add Role to Menu</button>
-                    </form>
-                </div>
-
             </div>
 
             <div class="right-content">
@@ -351,57 +273,83 @@
             }
         }
 
-        // UPLOAD WELCOME ASSET (Background or Font)
-        async function uploadWelcomeAsset(event, type) {
-            event.preventDefault();
-            const form = event.target;
-            const resultDiv = document.getElementById(type === 'bg' ? 'bgResult' : 'fontResult');
-            resultDiv.innerText = "Uploading...";
+        // REFRESH BAN LIST
+        async function refreshBanList() {
+            const btn = document.querySelector('#banListDropdown');
+            const resultDiv = document.getElementById('unbanResult');
+            btn.innerHTML = '<option value="">Loading bans...</option>';
+            resultDiv.innerText = "Fetching bans from Discord...";
             resultDiv.style.color = "#b9bbbe";
 
-            const formData = new FormData(form);
             try {
-                const response = await fetch(form.action, {
-                    method: 'POST',
-                    body: formData
+                const result = await safeFetch('/api/admin/get_ban_list', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: GUILD_ID })
                 });
-                const result = await response.json();
-                if(result.status === 'success') {
+                
+                if(result.status === 'success' && result.bans.length > 0) {
+                    let options = '<option value="">-- Select a banned user --</option>';
+                    result.bans.forEach(ban => {
+                        options += `<option value="${ban.user_id}" data-username="${ban.username}">${ban.username} (${ban.user_id})</option>`;
+                    });
+                    btn.innerHTML = options;
                     resultDiv.style.color = "#45ddc0";
-                    resultDiv.innerText = `✅ ${type === 'bg' ? 'Background' : 'Font'} uploaded! Bot will apply it on the next join.`;
-                    form.reset();
+                    resultDiv.innerText = `✅ Loaded ${result.bans.length} banned users.`;
+                } else if(result.status === 'success' && result.bans.length === 0) {
+                    btn.innerHTML = '<option value="">No banned users found.</option>';
+                    resultDiv.style.color = "#b9bbbe";
+                    resultDiv.innerText = "No banned users.";
                 } else {
+                    btn.innerHTML = '<option value="">Error loading bans</option>';
                     resultDiv.style.color = "#ff5555";
                     resultDiv.innerText = `❌ Error: ${result.message}`;
                 }
             } catch (e) {
+                btn.innerHTML = '<option value="">Error</option>';
                 resultDiv.style.color = "#ff5555";
-                resultDiv.innerText = `❌ Connection Error: ${e}`;
+                resultDiv.innerText = `❌ Failed: ${e.message}`;
             }
         }
 
-        // PREVIEW WELCOME CARD
-        async function previewWelcomeCard() {
-            const previewContainer = document.getElementById('previewContainer');
-            const previewImage = document.getElementById('previewImage');
-            previewContainer.style.display = 'block';
-            previewImage.src = '/api/admin/preview_welcome_card?' + new Date().getTime(); // Add timestamp to bypass cache
+        // FILL UNBAN INPUT FROM DROPDOWN
+        function fillUnbanFromDropdown() {
+            const dropdown = document.getElementById('banListDropdown');
+            const selected = dropdown.options[dropdown.selectedIndex];
+            if(selected.value) {
+                document.getElementById('unban_user_id').value = selected.value;
+            }
         }
 
-        // UNBAN
-        async function submitUnban(event) {
-            event.preventDefault();
+        // SUBMIT UNBAN
+        async function submitUnban() {
             const userId = document.getElementById('unban_user_id').value.trim();
             const reason = document.getElementById('unban_reason').value.trim() || 'No reason provided.';
-            if(!userId) { alert("❌ Please provide a User ID."); return; }
+            const resultDiv = document.getElementById('unbanResult');
+            
+            if(!userId) { resultDiv.style.color = "#ff5555"; resultDiv.innerText = "❌ Please provide a User ID or select from the list."; return; }
+            
+            resultDiv.innerText = "Queuing unban...";
+            resultDiv.style.color = "#b9bbbe";
+
             try {
-                const result = await safeFetch('/api/admin/mod_action', {
+                const result = await safeFetch('/api/admin/unban_by_id', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, action: 'unban', reason: reason })
+                    body: JSON.stringify({ guild_id: GUILD_ID, user_id: userId, reason: reason })
                 });
-                if(result.status === 'success') { alert(`✅ Unban queued for bot!`); document.getElementById('unbanForm').reset(); }
-                else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed: ${e.message}`); }
+                if(result.status === 'success') { 
+                    resultDiv.style.color = "#45ddc0";
+                    resultDiv.innerText = `✅ Unban queued for bot!`;
+                    document.getElementById('unban_user_id').value = '';
+                    document.getElementById('unban_reason').value = '';
+                    setTimeout(refreshBanList, 3000);
+                } else { 
+                    resultDiv.style.color = "#ff5555";
+                    resultDiv.innerText = `❌ Error: ${result.message}`;
+                }
+            } catch (e) { 
+                resultDiv.style.color = "#ff5555";
+                resultDiv.innerText = `❌ Failed: ${e.message}`;
+            }
         }
 
         // OPEN MANAGE USER MODAL
@@ -505,52 +453,6 @@
                     body: JSON.stringify({ guild_id: GUILD_ID, channel_id: channelId, content })
                 });
                 if(result.status === 'success') { alert(`✅ Announcement sent!`); document.getElementById('announcementForm').reset(); }
-                else { alert(`❌ Error: ${result.message}`); }
-            } catch (e) { alert(`❌ Failed: ${e.message}`); }
-        }
-
-        // CREATE REACTION ROLE
-        async function createReactionRole(event) {
-            event.preventDefault();
-            const btn = document.getElementById('rrSubmitBtn'); const resultDiv = document.getElementById('rrResult');
-            btn.disabled = true; btn.innerText = "Creating..."; resultDiv.innerText = "";
-            
-            const channelId = document.getElementById('rr_channel_id').value; 
-            const title = document.getElementById('rr_title').value;
-            const description = document.getElementById('rr_description').value; 
-            const color = document.getElementById('rr_color').value;
-
-            if(!channelId) { resultDiv.innerText = "❌ Please enter a valid Channel ID."; btn.disabled=false; return; }
-
-            try {
-                const result = await safeFetch('/api/admin/create_reaction_role', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, channel_id: parseInt(channelId), title, description, color, roles: [] })
-                });
-                if(result.status === 'success') {
-                    resultDiv.style.color = "#45ddc0"; resultDiv.innerText = `✅ Menu Created! Msg ID: ${result.message_id}`;
-                } else { resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${result.message}`; }
-            } catch (e) { 
-                resultDiv.style.color = "#ff5555"; resultDiv.innerText = `❌ Error: ${e.message}`; 
-            }
-            finally { btn.disabled = false; btn.innerText = "Create Empty Menu"; }
-        }
-
-        // ADD ROLE TO REACTION ROLE MENU
-        async function addReactionRole(event) {
-            event.preventDefault();
-            const msgId = document.getElementById('rr_msg_id').value.trim();
-            const emoji = document.getElementById('rr_add_emoji').value.trim();
-            const roleId = document.getElementById('rr_add_roleid').value.trim();
-            const desc = document.getElementById('rr_add_desc').value.trim() || 'No description.';
-            if(!msgId || !emoji || !roleId) { alert("❌ Msg ID, Emoji, and Role ID are required."); return; }
-
-            try {
-                const result = await safeFetch('/api/admin/add_reaction_role', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ guild_id: GUILD_ID, message_id: msgId, emoji, role_id: parseInt(roleId), description: desc })
-                });
-                if(result.status === 'success') { alert(`✅ Role added to menu!`); document.getElementById('rrAddForm').reset(); }
                 else { alert(`❌ Error: ${result.message}`); }
             } catch (e) { alert(`❌ Failed: ${e.message}`); }
         }
